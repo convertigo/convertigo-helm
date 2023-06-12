@@ -25,7 +25,14 @@ spec:
         - name: {{ .Chart.Name }}-br
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+          volumes: 
+            - name : br-data
+              persistentVolumeClaim:
+                claimName: br-workspace-claim                   
           image: "baserow/baserow:1.17.0"
+          volumeMounts:
+            - name: br-data
+              mountPath: /data/data
           env:
             - name: BASEROW_PUBLIC_URL
               value: https://baserow.service.rhs.zz

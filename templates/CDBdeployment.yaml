@@ -21,11 +21,18 @@ spec:
       serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes: 
+        - name : cdb-data
+          persistentVolumeClaim:
+            claimName: cdb-workspace-claim
       containers:
         - name: {{ .Chart.Name }}-cdb
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "couchdb:3.3.2"
+          volumeMounts:
+            - name: c8o-data
+              mountPath: /opt/couchdb/data
           env:
             - name: COUCHDB_USER
               value: admin

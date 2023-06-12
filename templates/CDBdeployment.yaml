@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "convertigo.fullname" . }}-cdb
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}-cdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "convertigo.selectorLabels" . | nindent 6 }}-cdb
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}-cdb
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "convertigo.selectorLabels" . | nindent 8 }}-cdb
+    spec:
+      serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-cdb
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "couchdb:3.3.2"
+          env:
+            - name: COUCHDB_USER
+              value: admin
+            - name: COUCHDB_PASSWORD
+              value: fullsyncpassword
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 5984
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /_utils
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /_utils
+              port: http

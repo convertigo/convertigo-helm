@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "convertigo.fullname" . }}-mysql
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "convertigo.selectorLabels" . | nindent 6 }}-mysql
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}-mysql
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "convertigo.selectorLabels" . | nindent 8 }}-mysql
+    spec:
+      serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-mysql
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "mysql:8.0.33"
+          env:
+          - name: MYSQL_RANDOM_ROOT_PASSWORD
+            value: 'yes'
+          - name: MYSQL_DATABASE
+            value: c8oAnalytics
+          - name: MYSQL_USER
+            value: c8oAnalytics
+          - name: MYSQL_PASSWORD
+            value: c8oAnalytics
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3306
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+          readinessProbe:
+            tcpSocket:
+              port: 3306

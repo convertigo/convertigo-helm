@@ -31,7 +31,7 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "couchdb:3.3.2"
           volumeMounts:
-            - name: c8o-data
+            - name: cdb-data
               mountPath: /opt/couchdb/data
           env:
             - name: COUCHDB_USER

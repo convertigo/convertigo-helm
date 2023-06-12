@@ -30,7 +30,7 @@ spec:
       volumes: 
         - name : c8o-workspace
           persistentVolumeClaim:
-            claimName: c8o-workspace
+            claimName: c8o-workspace-claim
       containers:
         - name: {{ .Chart.Name }}
           securityContext:

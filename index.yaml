@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  convertigo:
+  - apiVersion: v2
+    appVersion: 8.2.1
+    created: "2023-06-12T16:29:02.4743194+02:00"
+    description: A Helm chart for Kubernetes
+    digest: d182b59eb2837b4976ed2f869bc221bc7667e9055f0353b86ca77d00cbfdfde7
+    name: convertigo
+    type: application
+    urls:
+    - convertigo-0.1.0.tgz
+    version: 0.1.0
+generated: "2023-06-12T16:29:02.4713577+02:00"

@@ -1,10 +1,17 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: cdb-workspace-claim
+  name: {{ include "convertigo.fullname" . }}-cdb-workspace
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: "{{ .Values.couchdb.persistentVolume.size }}"
+{{- if .Values.couchdb.persistentVolume.storageClass }}
+{{- if (eq "-" .Values.couchdb.persistentVolume.storageClass) }}
+  storageClassName: ""
+{{- else }}
+  storageClassName: "{{ .Values.couchdb.persistentVolume.storageClass }}"
+{{- end }}  
+{{- end }}        

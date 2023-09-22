@@ -1,0 +1,19 @@
+{{- if .Values.baserow.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "convertigo.fullname" . }}-br-workspace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.baserow.persistentVolume.size }}"
+{{- if .Values.baserow.persistentVolume.storageClass }}
+{{- if (eq "-" .Values.baserow.persistentVolume.storageClass) }}
+  storageClassName: ""
+{{- else }}
+  storageClassName: "{{ .Values.baserow.persistentVolume.storageClass }}"
+{{- end }}    
+{{- end }}       
+{{- end }}        

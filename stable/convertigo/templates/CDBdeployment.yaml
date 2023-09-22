@@ -19,12 +19,10 @@ spec:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}-cdb
     spec:
       serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes: 
         - name : cdb-data
           persistentVolumeClaim:
-            claimName: cdb-workspace-claim
+            claimName: {{ include "convertigo.fullname" . }}-cdb-workspace
       containers:
         - name: {{ .Chart.Name }}-cdb
           securityContext:
@@ -51,3 +49,4 @@ spec:
             httpGet:
               path: /_utils
               port: http
+       

@@ -81,3 +81,33 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+
+# ====== MYSQL ==========
+mysql:
+  enabled: true
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi 
+
+
+# ====== Baserow ==========
+baserow:
+  enabled: true
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi 
+
+
+# ====== Workspace ==========
+workspace:
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi
+
+
+# ====== Couchdb ==========
+couchdb:
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi

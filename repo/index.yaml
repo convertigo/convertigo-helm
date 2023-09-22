@@ -3,9 +3,9 @@ entries:
   convertigo:
   - apiVersion: v2
     appVersion: 8.2.2
-    created: "2023-09-21T12:36:22.831412855+02:00"
+    created: "2023-09-22T08:45:38.632421702+02:00"
     description: A Helm chart for Kubernetes
-    digest: 2ec218ac36c699656daee22f9fe64b4b40bb8db4065f0cd54d0c9a489393db84
+    digest: c1e3107f986a394dc23152aaf89f1636a06b52d32d1e8e929af8b1e57c4a2142
     name: convertigo
     type: application
     urls:
@@ -13,7 +13,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 8.2.1
-    created: "2023-09-21T12:36:22.826346548+02:00"
+    created: "2023-09-22T08:45:38.627268702+02:00"
     description: A Helm chart for Kubernetes
     digest: f44a8fec86eca6f4afb79742a745c0aa066900545a218f18303d8872414fb46d
     name: convertigo
@@ -21,4 +21,4 @@ entries:
     urls:
     - convertigo-0.1.0.tgz
     version: 0.1.0
-generated: "2023-09-21T12:36:22.821772942+02:00"
+generated: "2023-09-22T08:45:38.621858102+02:00"

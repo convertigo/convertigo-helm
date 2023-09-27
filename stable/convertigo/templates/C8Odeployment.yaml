@@ -38,7 +38,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           volumeMounts:
             - name: c8o-workspace
-              mountPath: /data
+              mountPath: {{ .Values.workspacePath }}
           env:
           - name: JAVA_OPTS
             value: '
@@ -49,7 +49,7 @@ spec:
             -Dconvertigo.engine.billing.persistence.jdbc.username=c8oAnalytics
             -Dconvertigo.engine.billing.persistence.jdbc.password=c8oAnalytics
             -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:mysql://{{ include "convertigo.fullname" . }}-mysql:3306/c8oAnalytics?allowPublicKeyRetrieval=true
-            -Dconvertigo.cems.user_workspace_path=/data/workspace
+            -Dconvertigo.cems.user_workspace_path={{ .Values.workspacePath }}
             '
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -66,12 +66,12 @@ spec:
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      
+  {{- if .Values.podSecurityContext.runAsUser }}      
       initContainers:
         - command:
           - 'sh'
           - '-c'
-          - 'mkdir /data/workspace && chown {{ include "convertigo.runAsUserId" . }}:{{ include "convertigo.runAsUserId" . }} /data/workspace && chmod 777 /data/workspace && chown -f {{ include "convertigo.runAsUserId" . }}:{{ include "convertigo.runAsUserId" . }} /data/workspace/* || true'
+          - 'mkdir {{ .Values.workspacePath }} && chown {{ include "convertigo.runAsUserId" . }}:{{ include "convertigo.runAsUserId" . }} {{ .Values.workspacePath }} && chmod 777 {{ .Values.workspacePath }} && chown -f {{ include "convertigo.runAsUserId" . }}:{{ include "convertigo.runAsUserId" . }} {{ .Values.workspacePath }}/* || true'
           image: busybox
           imagePullPolicy: Always
           name: volume-mount-hack
@@ -88,8 +88,8 @@ spec:
           terminationMessagePolicy: File
           volumeMounts:
               - name: c8o-workspace
-                mountPath: /data
-      
+                mountPath: {{ .Values.workspacePath }}
+  {{- end }}      
       
       {{- with .Values.nodeSelector }}
       nodeSelector:

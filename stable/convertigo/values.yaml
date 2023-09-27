@@ -8,7 +8,7 @@ image:
   repository: convertigo
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "8.2.2"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -81,3 +81,33 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+
+# ====== MYSQL ==========
+mysql:
+  enabled: true
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi 
+
+
+# ====== Baserow ==========
+baserow:
+  enabled: true
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi 
+
+
+# ====== Workspace ==========
+workspace:
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi
+
+
+# ====== Couchdb ==========
+couchdb:
+  persistentVolume:
+    storageClass: "-"
+    size: 5Gi

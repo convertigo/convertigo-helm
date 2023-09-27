@@ -1,10 +1,17 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: c8o-workspace-claim
+  name: {{ include "convertigo.fullname" . }}-c8o-workspace
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: "{{ .Values.workspace.persistentVolume.size }}"
+{{- if .Values.workspace.persistentVolume.storageClass }}
+{{- if (eq "-" .Values.workspace.persistentVolume.storageClass) }}
+  storageClassName: ""
+{{- else }}
+  storageClassName: "{{ .Values.workspace.persistentVolume.storageClass }}"
+{{- end }}    
+{{- end }}       

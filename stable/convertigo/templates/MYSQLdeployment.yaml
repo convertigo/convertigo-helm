@@ -1,3 +1,4 @@
+{{- if .Values.mysql.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +25,7 @@ spec:
       volumes: 
         - name : mysql-data
           persistentVolumeClaim:
-            claimName: mysql-workspace-claim        
+            claimName: {{ include "convertigo.fullname" . }}-mysql-workspace    
       containers:
         - name: {{ .Chart.Name }}-mysql
           securityContext:
@@ -51,3 +52,4 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 3306
+{{- end }}                

@@ -4,7 +4,7 @@
 Charts are packaged and stored under `repo/` directory. To use this github repository as helm repository you need to run these commands:
 
 ```bash
-$ helm repo add convertigo  'https://raw.githubusercontent.com/convertigo/convertigo-helm/tree/master/repo'     'https://raw.githubusercontent.com/3slab/helm-charts/master/repo'
+$ helm repo add convertigo 'https://raw.githubusercontent.com/convertigo/convertigo-helm/master/repo'
 $ helm repo update
 ```
 

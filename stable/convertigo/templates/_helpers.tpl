@@ -67,3 +67,10 @@ get run as user id
 {{ define "convertigo.runAsUserId"}}
 {{- if .Values.podSecurityContext.runAsUser }}{{ .Values.podSecurityContext.runAsUser }}{{- else }}1000{{- end }}
 {{- end }}
+
+{{/*
+get run as group id
+*/}}
+{{ define "convertigo.runAsGroupId"}}
+{{- if .Values.podSecurityContext.fsGroup }}{{ .Values.podSecurityContext.fsGroup }}{{- else }}{{ template "convertigo.runAsUserId" . }}{{- end }}
+{{- end }}

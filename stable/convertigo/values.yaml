@@ -25,9 +25,11 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: 
+workspacePath: /workspace
+
+podSecurityContext: {}
   # fsGroup: 2000
-  runAsUser: 1001
+  # runAsUser: 1001
 
 securityContext: {}
   # capabilities:

@@ -23,9 +23,13 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes: 
-        - name : timescaledb-data
+        - name: timescaledb-data
           persistentVolumeClaim:
-            claimName: {{ include "convertigo.fullname" . }}-timescaledb-workspace    
+            claimName: {{ include "convertigo.fullname" . }}-timescaledb-workspace
+        - name: init-scripts
+          configMap:
+            name: c8o-init-scripts
+            defaultMode: 0777
       containers:
         - name: {{ .Chart.Name }}-timescaledb
           securityContext:
@@ -34,6 +38,8 @@ spec:
           volumeMounts:
             - name: timescaledb-data
               mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
           env:
           - name: POSTGRES_PASSWORD
             value: "{{ .Values.timescaledb.password }}"

@@ -35,21 +35,19 @@ spec:
             - name: br-data
               mountPath: /baserow/data
           env:
-            - name: BASEROW_PUBLIC_URL
-              value: https://baserow.service.rhs.zz
-            - name: BASEROW_EXTRA_ALLOWED_HOSTS
-              value: 192.168.0.2
+            - name: DATABASE_HOST
+              value: {{ include "convertigo.fullname" . }}-timescaledb
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: {{ .Values.baserow.baserow_db }}
+            - name: DATABASE_USER
+              value: {{ .Values.baserow.baserow_user }}
+            - name: DATABASE_PASSWORD
+              value: {{ .Values.baserow.baserow_password }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 80
               protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /
-              port: http
-          readinessProbe:
-            httpGet:
-              path: /
-              port: http
 {{- end }}                

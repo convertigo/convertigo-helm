@@ -83,31 +83,42 @@ tolerations: []
 affinity: {}
 
 
-# ====== MYSQL ==========
-mysql:
+# ====== timescaledb ==========
+timescaledb:
   enabled: true
+  user: postgres
+  password: ChangeMe!
+  billing_database: c8oAnalytics
+  billing_user: c8oAnalytics
+  billing_password: c8oAnalytics
+  br_user: 
   persistentVolume:
-    storageClass: "-"
+    storageClass: hostpath
     size: 5Gi 
 
 
 # ====== Baserow ==========
 baserow:
   enabled: true
+  baserow_db : basereow
+  baserow_user: baserow
+  baserow_password: N0Passworw0rd
   persistentVolume:
-    storageClass: "-"
+    storageClass: hostpath
     size: 5Gi 
 
 
 # ====== Workspace ==========
 workspace:
   persistentVolume:
-    storageClass: "-"
+    storageClass: hostpath
     size: 5Gi
 
 
 # ====== Couchdb ==========
 couchdb:
+  admin: admin
+  password: fullsyncpassword
   persistentVolume:
-    storageClass: "-"
+    storageClass: hostpath
     size: 5Gi

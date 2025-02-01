@@ -1,0 +1,19 @@
+{{- if .Values.timescaledb.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "convertigo.fullname" . }}-timescaledb-workspace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.timescaledb.persistentVolume.size }}"
+{{- if .Values.timescaledb.persistentVolume.storageClass }}
+{{- if (eq "-" .Values.timescaledb.persistentVolume.storageClass) }}
+  storageClassName: ""
+{{- else }}
+  storageClassName: "{{ .Values.timescaledb.persistentVolume.storageClass }}"
+{{- end }}
+{{- end }}       
+{{- end }}        

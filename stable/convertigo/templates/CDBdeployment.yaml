@@ -27,15 +27,15 @@ spec:
         - name: {{ .Chart.Name }}-cdb
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "couchdb:3.3.2"
+          image: "couchdb:3.4.2"
           volumeMounts:
             - name: cdb-data
               mountPath: /opt/couchdb/data
           env:
             - name: COUCHDB_USER
-              value: admin
+              value: {{ .Values.couchdb.admin }}
             - name: COUCHDB_PASSWORD
-              value: fullsyncpassword
+              value: {{ .Values.couchdb.password }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

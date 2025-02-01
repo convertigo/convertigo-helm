@@ -1,0 +1,64 @@
+{{- if .Values.timescaledb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "convertigo.fullname" . }}-timescale
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}-timescaledb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "convertigo.selectorLabels" . | nindent 6 }}-timescaledb
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}-timescaledb
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "convertigo.selectorLabels" . | nindent 8 }}-timescaledb
+    spec:
+      serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes: 
+        - name : timescaledb-data
+          persistentVolumeClaim:
+            claimName: {{ include "convertigo.fullname" . }}-timescaledb-workspace    
+      containers:
+        - name: {{ .Chart.Name }}-timescaledb
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "timescale/timescaledb:latest-pg16"
+          volumeMounts:
+            - name: timescaledb-data
+              mountPath: /var/lib/postgresql/data
+          env:
+          - name: POSTGRES_PASSWORD
+            value: "{{ .Values.timescaledb.password }}"
+          - name: POSTGRES_USER
+            value: "{{ .Values.timescaledb.user }}"
+          - name: BILLING_DB
+            value: "{{ .Values.timescaledb.billing_database }}"
+          - name: BILLING_PASSWORD
+            value: "{{ .Values.timescaledb.billing_password }}"
+          - name: BILLING_USER
+            value: "{{ .Values.timescaledb.billing_user }}"
+          - name: BASEROW_DB
+            value: "{{ .Values.baserow.baserow_db }}"
+          - name: BASEROW_USER
+            value: "{{ .Values.baserow.baserow_user }}"
+          - name: BASEROW_PASSWORD
+            value: "{{ .Values.baserow.baserow_password }}"
+
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 5432
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+{{- end }}                

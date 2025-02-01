@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "convertigo.fullname" . }}
+  name: {{ include "convertigo.fullname" . }}-convertigo
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}
 spec:
@@ -42,13 +42,15 @@ spec:
           env:
           - name: JAVA_OPTS
             value: '
-            -Dconvertigo.engine.fullsync.couch.username=admin
-            -Dconvertigo.engine.fullsync.couch.password=fullsyncpassword
+            -Dconvertigo.engine.fullsync.couch.username={{ .Values.couchdb.admin }}
+            -Dconvertigo.engine.fullsync.couch.password={{ .Values.couchdb.password }}
             -Dconvertigo.engine.fullsync.couch.url=http://{{ include "convertigo.fullname" . }}-cdb:5984
             -Dconvertigo.engine.billing.enabled=true
-            -Dconvertigo.engine.billing.persistence.jdbc.username=c8oAnalytics
-            -Dconvertigo.engine.billing.persistence.jdbc.password=c8oAnalytics
-            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:mysql://{{ include "convertigo.fullname" . }}-mysql:3306/c8oAnalytics?allowPublicKeyRetrieval=true
+            -Dconvertigo.engine.billing.persistence.jdbc.driver=org.postgresql.Driver
+            -Dconvertigo.engine.billing.persistence.dialect=org.hibernate.dialect.PostgreSQLDialect
+            -Dconvertigo.engine.billing.persistence.jdbc.username={{ .Values.timescaledb.user }}
+            -Dconvertigo.engine.billing.persistence.jdbc.password={{ .Values.timescaledb.password }}
+            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:postgresql://timescaledb/{{ include "convertigo.fullname" . }}-timescaledb:5432/{{ .Values.timescaledb.database }}
             '
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

@@ -37,6 +37,7 @@ spec:
               defaultMode: 0777
       containers:
         - name: {{ .Chart.Name }}
+          command: ["/bin/sh", "-c", "mkdir /workspace/projects && /home/convertigo/scripts/installCarFiles.sh && /docker-entrypoint.sh convertigo"]
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -57,21 +58,15 @@ spec:
             -Dconvertigo.engine.billing.persistence.dialect=org.hibernate.dialect.PostgreSQLDialect
             -Dconvertigo.engine.billing.persistence.jdbc.username={{ .Values.timescaledb.user }}
             -Dconvertigo.engine.billing.persistence.jdbc.password={{ .Values.timescaledb.password }}
-            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:postgresql://timescaledb/{{ include "convertigo.fullname" . }}-timescaledb:5432/{{ .Values.timescaledb.database }}
+            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:postgresql://timescaledb/{{ .Values.timescaledb.billing_database }}
             '
+          - name: JXMX
+            value: '{{ .Values.image.jxmx }}'
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /convertigo
-              port: http
-          readinessProbe:
-            httpGet:
-              path: /convertigo
-              port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       initContainers:

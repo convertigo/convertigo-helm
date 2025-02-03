@@ -10,3 +10,5 @@ data:
     curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.9/lib_BaseRow.car     -o /workspace/projects/lib_BaseRow.car
     cd /workspace/projects
     for file in *.car; do unzip "$file" ; done
+    chown convertigo:convertigo -R /workspace/projects
+    

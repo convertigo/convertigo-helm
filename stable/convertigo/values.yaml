@@ -7,6 +7,7 @@ replicaCount: 1
 image:
   repository: convertigo
   pullPolicy: IfNotPresent
+  jxmx: "512"
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 

@@ -28,9 +28,13 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes: 
-        - name : c8o-workspace
+        - name: c8o-workspace
           persistentVolumeClaim:
             claimName: {{ include "convertigo.fullname" . }}-c8o-workspace
+        - name: c8o-install-car-files
+          configMap:
+              name: c8o-install-car-files
+              defaultMode: 0777
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -39,6 +43,9 @@ spec:
           volumeMounts:
             - name: c8o-workspace
               mountPath: /workspace
+          volumeMounts:
+            - name: c8o-install-car-files
+              mountPath: /home/convertigo/scripts
           env:
           - name: JAVA_OPTS
             value: '

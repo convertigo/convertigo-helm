@@ -25,6 +25,7 @@ spec:
             claimName: {{ include "convertigo.fullname" . }}-cdb-workspace
       containers:
         - name: {{ .Chart.Name }}-cdb
+          command: ["/bin/sh", "-c", "echo '[couchdb]\nsingle_node=true' > /opt/couchdb/etc/local.d/setup.ini && /docker-entrypoint.sh couchdb"]
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "couchdb:3.4.2"

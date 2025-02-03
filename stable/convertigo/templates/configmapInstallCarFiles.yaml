@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: c8o-install-car-files
+data:
+  installCarFiles.sh: |
+    #!/bin/bash
+    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta17/C8Oforms.car           -o /workspace/projects/C8Oforms.car
+    curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.zip -o /workspace/projects/BaserowIntegration.car
+    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.9/lib_BaseRow.car     -o /workspace/projects/lib_BaseRow.car
+    cd /workspace/projects
+    for file in *.car; do unzip "$file" ; done

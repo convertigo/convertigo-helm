@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "convertigo.fullname" . }}-br
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}-br
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 5984
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "convertigo.selectorLabels" . | nindent 4 }}-br

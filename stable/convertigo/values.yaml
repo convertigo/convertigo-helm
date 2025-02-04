@@ -104,6 +104,7 @@ baserow:
   baserow_db : basereow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
+  baserow_public_url: http://127.0.0.1:8080
   persistentVolume:
     storageClass: hostpath
     size: 5Gi 

@@ -35,6 +35,10 @@ spec:
             - name: br-data
               mountPath: /baserow/data
           env:
+            - name: BASEROW_PUBLIC_URL
+              value: {{ .Values.baserow.baserow_public_url }}
+            - name: BASEROW_EXTRA_ALLOWED_HOSTS
+              value: "*"
             - name: DATABASE_HOST
               value: {{ include "convertigo.fullname" . }}-timescaledb
             - name: DATABASE_PORT

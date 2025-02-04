@@ -58,10 +58,26 @@ spec:
             -Dconvertigo.engine.billing.persistence.dialect=org.hibernate.dialect.PostgreSQLDialect
             -Dconvertigo.engine.billing.persistence.jdbc.username={{ .Values.timescaledb.user }}
             -Dconvertigo.engine.billing.persistence.jdbc.password={{ .Values.timescaledb.password }}
-            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:postgresql://timescaledb/{{ .Values.timescaledb.billing_database }}
+            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:postgresql://{{ include "convertigo.fullname" . }}-timescaledb/{{ .Values.timescaledb.billing_database }}
             '
           - name: JXMX
             value: '{{ .Values.image.jxmx }}'
+          - name: LOG_STDOUT
+            value: "true"
+          - name: LOG_FILE
+            value: "true"
+          - name: COOKIE_PATH
+            value: "/"
+          - name: COOKIE_SECURE
+            value: "true"
+          - name: COOKIE_SAMESITE
+            value: lax
+          - name: SESSION_TIMEOUT
+            value: "30"
+          - name: DISABLE_SUDO
+            value: "false"
+          - name: BASEROW_PUBLIC_URL
+            value: '{{ .Values.baserow.baserow_public_url }}'
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

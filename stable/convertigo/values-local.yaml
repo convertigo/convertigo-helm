@@ -94,7 +94,7 @@ timescaledb:
   billing_password: c8oAnalytics
   br_user: 
   persistentVolume:
-    storageClass: ebs-sc
+    storageClass: hostpath
     size: 5Gi 
 
 
@@ -104,16 +104,15 @@ baserow:
   baserow_db : basereow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
-  baserow_public_url: http://127.0.0.1:8080
   persistentVolume:
-    storageClass: ebs-sc
+    storageClass: hostpath
     size: 5Gi 
 
 
 # ====== Workspace ==========
 workspace:
   persistentVolume:
-    storageClass: ebs-sc
+    storageClass: hostpath
     size: 5Gi
 
 
@@ -122,5 +121,5 @@ couchdb:
   admin: admin
   password: fullsyncpassword
   persistentVolume:
-    storageClass: ebs-sc
+    storageClass: hostpath
     size: 5Gi

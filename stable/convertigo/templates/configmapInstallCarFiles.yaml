@@ -10,5 +10,53 @@ data:
     curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.9/lib_BaseRow.car     -o /workspace/projects/lib_BaseRow.car
     cd /workspace/projects
     for file in *.car; do unzip "$file" ; done
+    mkdir /workspace/configuration
+    cd /workspace/configuration
+    cat << EOF > global_symbols.properties
+      C8Oforms.baserow.iframe={{ .Values.baserow.baserow_public_url }}/c8o/
+      lib_baserow.https=false
+      lib_baserow.port=80
+      lib_baserow.server={{ include "convertigo.fullname" . }}-br
+      lib_baserow.adminuser=
+      lib_baserow.password.secret=
+
+      C8Oforms.EnableProductTour=false
+      C8Oforms.hideConvertigoLogin=false
+      C8Oforms.hidePasswordForgotten=false
+      C8Oforms.max_tiny_img_size=1500
+      C8Oforms.max_tiny_img_size_msg=*** MAX TINY MCE IMG SIZE MESSAGE ***
+      C8Oforms.max_tiny_warn_msg=
+      C8Oforms.maxThreads=20
+
+      lib.actions.c8oforms.smtp.password.secret=
+      lib.actions.c8oforms.smtp.port=587
+      lib.actions.c8oforms.smtp.security=Basic
+      lib.actions.c8oforms.smtp.sender=Convertigo Forms Builder <noreply@convertigo.com>
+      lib.actions.c8oforms.smtp.server=smtp-relay.brevo.com
+      lib.actions.c8oforms.smtp.user=
+      lib.actions.c8oforms.sql.host=
+      lib.actions.c8oforms.sql.password.secret=
+      lib.actions.c8oforms.sql.port=
+      lib.actions.c8oforms.sql.pwd=
+      lib.actions.c8oforms.sql.user=
+      lib_UserManager.smtp.port=465
+      lib_UserManager.smtp.sender=Convertigo <noreply@convertigo.com>
+      lib_UserManager.smtp.server=smtp.gmail.com
+      lib_UserManager.smtp.user=noreply@convertigo.com
+      lib_UserManager_ui_ngx.metadata={"appName"\: "Convertigo No code studio", "imgUrl"\: "https\://cdn.prod.website-files.com/62d55bc018a5be3f0b91fcf3/62d55bc018a5be089691fd24_Color%3DBlueConvertigo.png", "htmlText"\: ""}
+      lib_oauth.azuread.clientid=
+      lib_oauth.azuread.tenantid=common
+      lib_oauth.github.clientid=
+      lib_oauth.github.keysecret.secret=
+      lib_oauth.google.clientid=
+      lib_oauth.google.keysecret.secret=
+      lib_oauth.linkedin.clientid=
+      lib_oauth.linkedin.keysecret.secret=
+      lib_oauth.openid.clientid=
+      lib_oauth.openid.clientsecret.secret=
+      lib_oauth.openid.instrospect_url=
+      lib_producttour.weglot_api_key=
+    EOF
+
     chown convertigo:convertigo -R /workspace/projects
     

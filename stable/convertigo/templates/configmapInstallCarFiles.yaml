@@ -59,4 +59,5 @@ data:
     EOF
 
     chown convertigo:convertigo -R /workspace/projects
+    chown convertigo:convertigo -R /workspace/configuration
     

@@ -5,7 +5,7 @@ metadata:
 data:
   installCarFiles.sh: |
     #!/bin/bash
-    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta17/C8Oforms.car           -o /workspace/projects/C8Oforms.car
+    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta18/C8Oforms.car           -o /workspace/projects/C8Oforms.car
     curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.zip -o /workspace/projects/BaserowIntegration.car
     curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.9/lib_BaseRow.car     -o /workspace/projects/lib_BaseRow.car
     cd /workspace/projects
@@ -17,8 +17,8 @@ data:
       lib_baserow.https=false
       lib_baserow.port=80
       lib_baserow.server={{ include "convertigo.fullname" . }}-br
-      lib_baserow.adminuser=
-      lib_baserow.password.secret=
+      lib_baserow.adminuser=admin@convertigo.com
+      lib_baserow.password.secret=x701301a25336f85870cef65c4c7b4b1b56fd1ac5c3496db716f30ea60a29ebea
 
       C8Oforms.EnableProductTour=false
       C8Oforms.hideConvertigoLogin=false
@@ -28,14 +28,14 @@ data:
       C8Oforms.max_tiny_warn_msg=
       C8Oforms.maxThreads=20
 
-      lib.actions.c8oforms.smtp.password.secret=
+      lib.actions.c8oforms.smtp.password.secret=xd8e180806a1c1d83a6255212121ab827
       lib.actions.c8oforms.smtp.port=587
       lib.actions.c8oforms.smtp.security=Basic
       lib.actions.c8oforms.smtp.sender=Convertigo Forms Builder <noreply@convertigo.com>
       lib.actions.c8oforms.smtp.server=smtp-relay.brevo.com
       lib.actions.c8oforms.smtp.user=
       lib.actions.c8oforms.sql.host=
-      lib.actions.c8oforms.sql.password.secret=
+      lib.actions.c8oforms.sql.password.secret=xd8e180806a1c1d83a6255212121ab827
       lib.actions.c8oforms.sql.port=
       lib.actions.c8oforms.sql.pwd=
       lib.actions.c8oforms.sql.user=
@@ -47,13 +47,13 @@ data:
       lib_oauth.azuread.clientid=
       lib_oauth.azuread.tenantid=common
       lib_oauth.github.clientid=
-      lib_oauth.github.keysecret.secret=
+      lib_oauth.github.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
       lib_oauth.google.clientid=
-      lib_oauth.google.keysecret.secret=
+      lib_oauth.google.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
       lib_oauth.linkedin.clientid=
-      lib_oauth.linkedin.keysecret.secret=
+      lib_oauth.linkedin.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
       lib_oauth.openid.clientid=
-      lib_oauth.openid.clientsecret.secret=
+      lib_oauth.openid.clientsecret.secret=xd8e180806a1c1d83a6255212121ab827
       lib_oauth.openid.instrospect_url=
       lib_producttour.weglot_api_key=
     EOF

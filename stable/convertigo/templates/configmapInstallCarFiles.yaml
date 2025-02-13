@@ -13,7 +13,7 @@ data:
     mkdir /workspace/configuration
     cd /workspace/configuration
     cat << EOF > global_symbols.properties
-      C8Oforms.baserow.iframe={{ .Values.baserow.baserow_public_url }}/c8o/
+      C8Oforms.baserow.iframe={{ .Values.baserow.baserow_public_url }}/convertigo/projects/BaserowIntegration/c8o/
       lib_baserow.https=false
       lib_baserow.port=80
       lib_baserow.server={{ include "convertigo.fullname" . }}-br

@@ -56,13 +56,7 @@ ingress:
     nginx.ingress.kubernetes.io/session-cookie-secure: "false"
     nginx.ingress.kubernetes.io/session-cookie-path: "/convertigo"
     nginx.ingress.kubernetes.io/session-cookie-httponly: "true"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-        log_format sticky '$remote_addr - $remote_user [$time_local] '
-                          '"$request" $status $body_bytes_sent '
-                          '"$http_referer" "$http_user_agent" '
-                          'Cookie: "$http_cookie" '
-                          'Set-Cookie: "$sent_http_set_cookie" '
-                          'Upstream: $upstream_addr';
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
 
   tls: []
   #  - secretName: chart-example-tls

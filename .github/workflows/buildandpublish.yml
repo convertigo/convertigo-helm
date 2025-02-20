@@ -3,7 +3,7 @@ name: Publish Helm Chart to Amazon ECR Public
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - "stable//**"
 

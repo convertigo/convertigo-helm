@@ -22,7 +22,8 @@ jobs:
 
       - name: Package Helm Chart
         run: |
-          helm package stable
+          cd stable/convertigo 
+          helm package .
           ls -l *.tgz
 
       - name: Push Helm Chart to Amazon ECR Public

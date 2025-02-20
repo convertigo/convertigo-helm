@@ -1,11 +1,6 @@
 name: Publish Helm Chart to Amazon ECR Public
 
-on:
-  push:
-    branches:
-      - master
-    paths:
-      - "//**"
+on: push
 
 jobs:
   publish:

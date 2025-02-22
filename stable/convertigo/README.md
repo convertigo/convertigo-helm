@@ -51,3 +51,23 @@ Find below the values.yaml customization options :
 |baserow.baserow_user| baserow | The Postgres SQL database access user name |
 |baserow.baserow_password|N0Passworw0rd | The Postgres SQL database access password | 
 |baserow.persistentVolume| hostpath of 5Gb | The baserow No Code  database persistent volume claim. Customize here to use Volume claims for your cluster provider. See below some sample volume claims |
+
+## Needed annotations for nginx
+
+As Convertigo workers require "sticky" sessions we need some specific nginx annotations. Some other needed configuration is also defined here. If you use another ingress controller be sure to configure the equivalent settings.
+
+```code
+  annotations: 
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "true"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-secure: "false"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/convertigo"
+    nginx.ingress.kubernetes.io/session-cookie-httponly: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 500m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+```

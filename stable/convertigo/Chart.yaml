@@ -1,6 +1,7 @@
 apiVersion: v2
 name: convertigo
 description: The Convertigo Low Code / No Code Platform running on Kubernetes
+icon: https://awsmp-logos.s3.amazonaws.com/53f95f8a-6f57-49e7-b65b-087f36e7e4e3/fe196c1d1ec138162fa3ba0329a978fe.png
 
 # A chart can be either an 'application' or a 'library' chart.
 #

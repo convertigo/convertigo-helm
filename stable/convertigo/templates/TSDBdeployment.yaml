@@ -37,10 +37,12 @@ spec:
           image: "timescale/timescaledb:latest-pg16"
           volumeMounts:
             - name: timescaledb-data
-              mountPath: /var/lib/postgresql/data/dbdata
+              mountPath: /var/lib/postgresql/data
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
           env:
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
           - name: POSTGRES_PASSWORD
             value: "{{ .Values.timescaledb.password }}"
           - name: POSTGRES_USER

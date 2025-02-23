@@ -37,7 +37,7 @@ spec:
           image: "timescale/timescaledb:latest-pg16"
           volumeMounts:
             - name: timescaledb-data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql/data/dbdata
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
           env:

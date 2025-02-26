@@ -9,7 +9,7 @@
 # when the hash of the last commit in the branch you set up changes. This does
 # NOT apply to ownership claim operations, which are processed immediately.
 #
-repositoryID: ed60c3ae-dd87-41af-b8f9-cb5260ec723d
+repositoryID: b994c91e-4265-4c9e-b54b-779e968a5951
 owners: # (optional, used to claim repository ownership)
   - name: Olivier Picciotto
     email: olivierp@convertigo.com

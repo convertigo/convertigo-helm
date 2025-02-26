@@ -19,7 +19,7 @@ fullnameOverride: ""
 
 #This must be the public DNS name the users will use to access Convertigo
 #This is used to generate the Ingress configuration
-public_addr: "fuseus"
+public_addr: "mac-mini-de-olivier.local"
 
 #If true, the Convertigo server will only be accessible through HTTPS
 ssl_only: "false"

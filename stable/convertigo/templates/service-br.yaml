@@ -11,5 +11,9 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+    - port: 8000
+      targetPort: http
+      protocol: 8000
+      name: http-backend
   selector:
     {{- include "convertigo.selectorLabels" . | nindent 4 }}-br

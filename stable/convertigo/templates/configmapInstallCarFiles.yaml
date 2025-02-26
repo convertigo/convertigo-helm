@@ -7,7 +7,6 @@ data:
     #!/bin/bash
     curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car           -o /workspace/projects/C8Oforms.car
     curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.11/lib_BaseRow.car    -o /workspace/projects/lib_BaseRow.car
-    curl -L https://github.com/convertigo/c8oprj-c8obilling/releases/download/2.1/C8OBilling.car         -o /workspace/projects/C8OBilling.car
 
     mkdir /workspace/projects/BaserowIntegration
     curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.tar.gz | tar xvz --strip-components=1 -C /workspace/projects/BaserowIntegration

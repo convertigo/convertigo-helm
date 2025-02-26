@@ -28,6 +28,7 @@ spec:
             claimName: {{ include "convertigo.fullname" . }}-br-workspace                   
       containers:
         - name: {{ .Chart.Name }}-br
+          command: ["/bin/sh", "-c", "sed -i -e s,127.0.0.1,0.0.0.0, /baserow/supervisor/default_baserow_env.sh && /baserow.sh start"]
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "baserow/baserow:1.30.1"

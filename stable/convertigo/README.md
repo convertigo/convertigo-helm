@@ -72,25 +72,28 @@ As Convertigo workers require "sticky" sessions we need some specific nginx anno
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 ```
 
-# Sample Amazon EKS Storage class
+## Amazon EKS Storage class
 
 On Amazon EKS you can define the gp3 storage class this way
 
 ```code
-  metadata:
-    name: gp3
-  allowedTopologies:
-    - matchLabelExpressions:
-        - key: topology.ebs.csi.aws.com/zone
-          values:
-            - eu-west-3a
-            - eu-west-3b
-            - eu-west-3c
-  apiVersion: storage.k8s.io/v1
-  kind: StorageClass
-  parameters:
-    type: gp3
-  provisioner: ebs.csi.eks.amazonaws.com
-  reclaimPolicy: Delete
-  volumeBindingMode: Immediate
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+parameters:
+  type: gp3
+provisioner: ebs.csi.eks.amazonaws.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
 ```
+
+And configure 
+```
+baserow.persitentVolume.storageClass: gp3
+couchdb.persitentVolume.storageClass: gp3
+timescaledb.persitentVolume.storageClass: gp3
+```
+
+in values.yaml
+

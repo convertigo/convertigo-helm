@@ -9,7 +9,8 @@ Kubernetes: `>=1.21.0-0`
 ## Install Chart for OCI repo
 
 ```console
-helm install [RELEASE NAME] oci://public.ecr.aws/m4y9m8m1/convertigo --version 8.3.2
+helm repo add convertigo https://convertigo-helm-charts.s3.eu-west-3.amazonaws.com
+helm install [RELEASE NAME] convertigo/convertigo --version x.y.z
 ```
 ## Applying custom values
 
@@ -17,7 +18,7 @@ You can download a sample values.yaml file [here](https://raw.githubusercontent.
 then use the 
 
 ```console
-helm install [RELEASE NAME] oci://public.ecr.aws/m4y9m8m1/convertigo --version 8.3.2 -f values.yaml
+helm install [RELEASE NAME] convertigo/convertigo --version x.y.z  -f values.yaml
 ```
  Command to install the chart with custom values .
 

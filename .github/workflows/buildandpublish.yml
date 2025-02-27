@@ -39,5 +39,5 @@ jobs:
           cd stable/convertigo
           LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)
           aws s3 cp "$LATEST_CHART" s3://convertigo-helm-charts/
-          helm repo index --url https://$BUCKET_NAME.s3.amazonaws.com/  .
+          helm repo index --url https://convertigo-helm-charts.s3.amazonaws.com/  .
           aws s3 cp index.yaml s3://convertigo-helm-charts/

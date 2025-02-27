@@ -28,16 +28,15 @@ annotations:
   artifacthub.io/category: integration-delivery
   artifacthub.io/links: |
     - name: Convertigo
-        url: https://www.convertigo.com
+      url: https://www.convertigo.com
     - name: Download Convertigo Studio
-        url: https://www.convertigo.com/fr/developers/low-code-studio-setup-guide/
+      url: https://www.convertigo.com/fr/developers/low-code-studio-setup-guide/
     - name: Convertigo Documentation
-        url: https://doc.convertigo.com/documentation/latest/
+      url: https://doc.convertigo.com/documentation/latest/
     - name: Convertigo Knowledge Base
-        url: https://kb.convertigo.com/ck/
+      url: https://kb.convertigo.com/ck/
   artifacthub.io/screenshots: |
     - title: No Code Studio for Citizen Developers
       url: https://cdn.prod.website-files.com/66745dcd1d27373131b0f833/67211bb1546c06342323618c_No%20code%20studio-p-2000.png
     - title: Low Code Studio for Professional Developers
       url: https://cdn.prod.website-files.com/66745dcd1d27373131b0f833/6736fd26567e12cf37e31e90_low%20code%20studio%20xparent.png
-      

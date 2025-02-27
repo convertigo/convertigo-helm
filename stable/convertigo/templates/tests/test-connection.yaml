@@ -11,5 +11,5 @@ spec:
     - name: wget
       image: busybox
       command: ['wget']
-      args: ['{{ include "convertigo.fullname" . }}:{{ .Values.service.port }}']
+      args: ['{{ include "convertigo.fullname" . }}:28080']
   restartPolicy: Never

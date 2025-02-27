@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}-br
 spec:
-  type: {{ .Values.service.type }}
+  type: ClusterIP
   ports:
     - port: 80
       targetPort: http

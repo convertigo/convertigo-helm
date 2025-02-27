@@ -1,7 +1,9 @@
-# Default values for convertigo.
+# Default values for convertigo Low Code / No Code Platform
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+#This is the number of Convertigo workers to deploy. One worker will handle about 200 to 300 connected users
+#You can scale up or down this number depending on your needs
 replicaCount: 1
 
 image:
@@ -14,6 +16,13 @@ image:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+#This must be the public DNS name the users will use to access Convertigo
+#This is used to generate the Ingress configuration
+public_addr: "fuseus"
+
+#If true, the Convertigo server will only be accessible through HTTPS
+ssl_only: "false"
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -38,16 +47,23 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-service:
-  type: ClusterIP
-  port: 28080
-
+#Configure your Ingress here. This default configuration is for NGINX Ingress. Be sure your ingress suports Sticky sessions
 ingress:
   enabled: true
   className: "nginx"
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
+  annotations: 
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "true"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-secure: "false"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/convertigo"
+    nginx.ingress.kubernetes.io/session-cookie-httponly: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 500m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
   tls: []
   #  - secretName: chart-example-tls
@@ -80,7 +96,7 @@ tolerations: []
 affinity: {}
 
 
-# ====== timescaledb ==========
+# ====== timescaledb ========== This will be used to hold NoC ode database and metrics data usage is mandatory ====
 timescaledb:
   enabled: true
   user: postgres
@@ -90,33 +106,36 @@ timescaledb:
   billing_password: c8oAnalytics
   br_user: 
   persistentVolume:
-    storageClass: ebs-sc
+    # adapt the storage class to your environment
+    storageClass: hostpath
     size: 5Gi 
 
 
-# ====== Baserow ==========
+# ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
 baserow:
   enabled: true
   baserow_db : basereow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
-  baserow_public_url: http://Mac-mini-de-Olivier.local
   persistentVolume:
-    storageClass: ebs-sc
+    # adapt the storage class to your environment
+    storageClass: hostpath
     size: 5Gi 
 
 
-# ====== Workspace ==========
+# ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
 workspace:
   persistentVolume:
-    storageClass: ebs-sc
+    # adapt the storage class to your environment
+    storageClass: hostpath
     size: 5Gi
 
 
-# ====== Couchdb ==========
+# ====== Couchdb ========== This is the No SQL database used by Convertigo =========================================
 couchdb:
   admin: admin
   password: fullsyncpassword
   persistentVolume:
-    storageClass: ebs-sc
+    # adapt the storage class to your environment
+    storageClass: hostpath
     size: 5Gi

@@ -41,3 +41,4 @@ jobs:
           aws s3 cp "$LATEST_CHART" s3://convertigo-helm-charts/
           helm repo index --url https://convertigo-helm-charts.s3.amazonaws.com/  .
           aws s3 cp index.yaml s3://convertigo-helm-charts/
+          aws s3 cp artifacthub-repo.yml s3://convertigo-helm-charts/

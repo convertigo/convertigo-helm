@@ -1,4 +1,4 @@
-1. Get the application URL by running these commands:
+Here are the application URLS.
 
 Convertigo Platform Admin console (Default user password is admin/admin):
 http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .Values.public_addr }}/convertigo/admin

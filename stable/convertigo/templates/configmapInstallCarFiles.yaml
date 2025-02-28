@@ -5,66 +5,108 @@ metadata:
 data:
   installCarFiles.sh: |
     #!/bin/bash
-    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car           -o /workspace/projects/C8Oforms.car
-    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.11/lib_BaseRow.car    -o /workspace/projects/lib_BaseRow.car
+    set -e
+    set -o pipefail
 
-    mkdir /workspace/projects/BaserowIntegration
-    curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.tar.gz | tar xvz --strip-components=1 -C /workspace/projects/BaserowIntegration
+    WORKSPACE="/workspace"
+    PROJECTS_DIR="$WORKSPACE/projects"
+    CONFIG_DIR="$WORKSPACE/configuration"
+    BASEROW_DIR="$PROJECTS_DIR/BaserowIntegration"
 
-    cd /workspace/projects
-    for file in *.car; do unzip "$file" ; done
-    mkdir /workspace/configuration
-    cd /workspace/configuration
-    cat << EOF > global_symbols.properties
-      C8Oforms.baserow.iframe=http://{{ .Values.public_addr }}/convertigo/projects/BaserowIntegration/c8o/
-      lib_baserow.https=false
-      lib_baserow.port=8000
-      lib_baserow.server={{ include "convertigo.fullname" . }}-br
-      lib_baserow.adminuser=admin@convertigo.com
-      lib_baserow.password.secret=x701301a25336f85870cef65c4c7b4b1b56fd1ac5c3496db716f30ea60a29ebea
+    # Check if installation is already done
+    echo "Check if installation is already done..."
+    ls -l
 
-      C8Oforms.EnableProductTour=false
-      C8Oforms.hideConvertigoLogin=false
-      C8Oforms.hidePasswordForgotten=false
-      C8Oforms.max_tiny_img_size=1500
-      C8Oforms.max_tiny_img_size_msg=*** MAX TINY MCE IMG SIZE MESSAGE ***
-      C8Oforms.max_tiny_warn_msg=
-      C8Oforms.maxThreads=20
+    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" && -d "$BASEROW_DIR" ]]; then
+        echo "Installation already exists. Skipping setup."
+        exit 0
+    fi
 
-      C8OBilling.database={{ include "convertigo.fullname" . }}-timescaledb
-      C8OBilling.password.secret=x446e80f253299d272a9a67561864df2a
-      C8OBilling.user={{ .Values.timescaledb.billing_user }}
+    # Ensure required directories exist
+    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
 
-      lib.actions.c8oforms.smtp.password.secret=xd8e180806a1c1d83a6255212121ab827
-      lib.actions.c8oforms.smtp.port=587
-      lib.actions.c8oforms.smtp.security=Basic
-      lib.actions.c8oforms.smtp.sender=Convertigo Forms Builder <noreply@convertigo.com>
-      lib.actions.c8oforms.smtp.server=smtp-relay.brevo.com
-      lib.actions.c8oforms.smtp.user=
-      lib.actions.c8oforms.sql.host=
-      lib.actions.c8oforms.sql.password.secret=xd8e180806a1c1d83a6255212121ab827
-      lib.actions.c8oforms.sql.port=
-      lib.actions.c8oforms.sql.pwd=
-      lib.actions.c8oforms.sql.user=
-      lib_UserManager.smtp.port=465
-      lib_UserManager.smtp.sender=Convertigo <noreply@convertigo.com>
-      lib_UserManager.smtp.server=smtp.gmail.com
-      lib_UserManager.smtp.user=noreply@convertigo.com
-      lib_UserManager_ui_ngx.metadata={"appName"\: "Convertigo No code studio", "imgUrl"\: "https\://cdn.prod.website-files.com/62d55bc018a5be3f0b91fcf3/62d55bc018a5be089691fd24_Color%3DBlueConvertigo.png", "htmlText"\: ""}
-      lib_oauth.azuread.clientid=
-      lib_oauth.azuread.tenantid=common
-      lib_oauth.github.clientid=
-      lib_oauth.github.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
-      lib_oauth.google.clientid=
-      lib_oauth.google.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
-      lib_oauth.linkedin.clientid=
-      lib_oauth.linkedin.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
-      lib_oauth.openid.clientid=
-      lib_oauth.openid.clientsecret.secret=xd8e180806a1c1d83a6255212121ab827
-      lib_oauth.openid.instrospect_url=
-      lib_producttour.weglot_api_key=
+    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car \
+        -o "$PROJECTS_DIR/C8Oforms.car"
+
+    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.11/lib_BaseRow.car \
+        -o "$PROJECTS_DIR/lib_BaseRow.car"
+
+    if [[ ! -d "$BASEROW_DIR" ]]; then
+        mkdir -p "$BASEROW_DIR"
+        curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.tar.gz | \
+            tar xvz --strip-components=1 -C "$BASEROW_DIR"
+    fi
+
+    # Extract .car files only if they haven’t been extracted
+    cd "$PROJECTS_DIR"
+    for file in *.car; do
+        DIR_NAME="${file%.car}"
+        if [[ ! -d "$DIR_NAME" ]]; then
+            unzip -o "$file"
+        fi
+    done
+
+    # Create global_symbols.properties only if it does not exist
+    GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
+    if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
+        cat > "$GLOBAL_SYMBOLS" << EOF
+    C8Oforms.baserow.iframe=http://{{ .Values.public_addr }}/convertigo/projects/BaserowIntegration/c8o/
+    lib_baserow.https=false
+    lib_baserow.port=8000
+    lib_baserow.server={{ include "convertigo.fullname" . }}-br
+    lib_baserow.adminuser=admin@convertigo.com
+    lib_baserow.password.secret=x701301a25336f85870cef65c4c7b4b1b56fd1ac5c3496db716f30ea60a29ebea
+
+    C8Oforms.EnableProductTour=false
+    C8Oforms.hideConvertigoLogin=false
+    C8Oforms.hidePasswordForgotten=false
+    C8Oforms.max_tiny_img_size=1500
+    C8Oforms.max_tiny_img_size_msg=*** MAX TINY MCE IMG SIZE MESSAGE ***
+    C8Oforms.max_tiny_warn_msg=
+    C8Oforms.maxThreads=20
+
+    C8OBilling.database={{ include "convertigo.fullname" . }}-timescaledb
+    C8OBilling.password.secret=x446e80f253299d272a9a67561864df2a
+    C8OBilling.user={{ .Values.timescaledb.billing_user }}
+
+    lib.actions.c8oforms.smtp.password.secret=xd8e180806a1c1d83a6255212121ab827
+    lib.actions.c8oforms.smtp.port=587
+    lib.actions.c8oforms.smtp.security=Basic
+    lib.actions.c8oforms.smtp.sender=Convertigo Forms Builder <noreply@convertigo.com>
+    lib.actions.c8oforms.smtp.server=smtp-relay.brevo.com
+    lib.actions.c8oforms.smtp.user=
+    lib.actions.c8oforms.sql.host=
+    lib.actions.c8oforms.sql.password.secret=xd8e180806a1c1d83a6255212121ab827
+    lib.actions.c8oforms.sql.port=
+    lib.actions.c8oforms.sql.pwd=
+    lib.actions.c8oforms.sql.user=
+    lib_UserManager.smtp.port=465
+    lib_UserManager.smtp.sender=Convertigo <noreply@convertigo.com>
+    lib_UserManager.smtp.server=smtp.gmail.com
+    lib_UserManager.smtp.user=noreply@convertigo.com
+    lib_UserManager_ui_ngx.metadata={"appName": "Convertigo No code studio", "imgUrl": "https://cdn.prod.website-files.com/62d55bc018a5be3f0b91fcf3/62d55bc018a5be089691fd24_Color%3DBlueConvertigo.png", "htmlText": ""}
+    lib_oauth.azuread.clientid=
+    lib_oauth.azuread.tenantid=common
+    lib_oauth.github.clientid=
+    lib_oauth.github.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
+    lib_oauth.google.clientid=
+    lib_oauth.google.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
+    lib_oauth.linkedin.clientid=
+    lib_oauth.linkedin.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
+    lib_oauth.openid.clientid=
+    lib_oauth.openid.clientsecret.secret=xd8e180806a1c1d83a6255212121ab827
+    lib_oauth.openid.instrospect_url=
+    lib_producttour.weglot_api_key=
     EOF
+    fi
 
-    chown convertigo:convertigo -R /workspace/projects
-    chown convertigo:convertigo -R /workspace/configuration
-    
+    # Set ownership only if not already owned
+    if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
+        chown -R convertigo:convertigo "$PROJECTS_DIR"
+    fi
+
+    if [[ $(stat -c "%U" "$CONFIG_DIR") != "convertigo" ]]; then
+        chown -R convertigo:convertigo "$CONFIG_DIR"
+    fi
+
+    echo "Setup completed successfully!"

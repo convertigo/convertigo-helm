@@ -116,3 +116,37 @@ Then install the controller
     --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"="internet-facing" 
 ```
 
+## Using let's encrypt on AWS.
+
+Start by installing let's encrypt certificate issuer 
+
+```
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+helm install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace \
+    --set installCRDs=true
+```
+
+Then create a Cluster Issuer 
+
+```
+kubectl apply -f - <<EOF
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: your-email@example.com  # Change this
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+EOF
+```
+
+The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *public_addr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingressn-ingress-XXXXX* AWS load balancer domain names.

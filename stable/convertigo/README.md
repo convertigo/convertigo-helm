@@ -98,3 +98,21 @@ timescaledb.persitentVolume.storageClass: gp3
 
 in values.yaml
 
+## Install AWS Nginx ingress controller with internet facing Load Balancer
+
+If it is not already done, When running on AWS you must create the Ingress controller **BEFORE** installing Convertigo HELM chart because you will need to configure in the values.yaml the DNS public address AWS Load Balancer created for you.
+
+Be sure all your subnets are tagged properly, if not the controller will not be able to create the internet facing load balancer. for each of you subnets do
+
+```
+ aws ec2 create-tags --resources <subnet-id> --tags Key=kubernetes.io/role/elb,Value=1
+```
+
+Then install the controller
+
+```
+ helm install  -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx  \
+    --set controller.service.type=LoadBalancer \
+    --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"="internet-facing" 
+```
+

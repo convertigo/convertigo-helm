@@ -1,0 +1,146 @@
+# Default values for convertigo Low Code / No Code Platform
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+#This is the number of Convertigo workers to deploy. One worker will handle about 200 to 300 connected users
+#You can scale up or down this number depending on your needs
+replicaCount: 1
+
+image:
+  repository: convertigo
+  pullPolicy: IfNotPresent
+  jxmx: "512"
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+#This must be the public DNS name the users will use to access Convertigo
+#This is used to generate the Ingress configuration
+public_addr: "k8s-ingressn-ingressn-6e49f06834-b0058c09fd5c4fa2.elb.eu-west-3.amazonaws.com"
+
+#If true, the Convertigo server will only be accessible through HTTPS
+ssl_only: "false"
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+  # runAsUser: 1001
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+#Configure your Ingress here. This default configuration is for NGINX Ingress. Be sure your ingress suports Sticky sessions
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "TCP"
+    service.beta.kubernetes.io/aws-load-balancer-alpn-policy: "HTTP2Preferred"
+
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "true"
+
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    acme.cert-manager.io/http01-edit-in-place: "true"
+
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-secure: "false"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/convertigo"
+    nginx.ingress.kubernetes.io/session-cookie-httponly: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 500m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+
+# ====== timescaledb ========== This will be used to hold NoC ode database and metrics data usage is mandatory ====
+timescaledb:
+  enabled: true
+  user: postgres
+  password: ChangeMe!
+  billing_database: c8oAnalytics
+  billing_user: c8oAnalytics
+  billing_password: c8oAnalytics
+  br_user: 
+  persistentVolume:
+    # adapt the storage class to your environment
+    storageClass: gp3
+    size: 5Gi 
+
+
+# ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
+baserow:
+  enabled: true
+  baserow_db : basereow
+  baserow_user: baserow
+  baserow_password: N0Passworw0rd
+  persistentVolume:
+    # adapt the storage class to your environment
+    storageClass: gp3
+    size: 5Gi 
+
+
+# ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
+workspace:
+  persistentVolume:
+    # adapt the storage class to your environment
+    storageClass: gp3
+    size: 5Gi
+
+
+# ====== Couchdb ========== This is the No SQL database used by Convertigo =========================================
+couchdb:
+  admin: admin
+  password: fullsyncpassword
+  persistentVolume:
+    # adapt the storage class to your environment
+    storageClass: gp3
+    size: 5Gi

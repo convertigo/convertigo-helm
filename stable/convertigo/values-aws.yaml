@@ -132,7 +132,7 @@ baserow:
 workspace:
   persistentVolume:
     # adapt the storage class to your environment
-    storageClass: gp3
+    storageClass: efs-sc
     size: 5Gi
 
 

@@ -49,6 +49,7 @@ spec:
           env:
           - name: JAVA_OPTS
             value: '
+            -Dconvertigo.engine.log4j.appender.CemsAppender.File=/tmp/convertigo-logs/engine.log
             -Dconvertigo.engine.fullsync.couch.username={{ .Values.couchdb.admin }}
             -Dconvertigo.engine.fullsync.couch.password={{ .Values.couchdb.password }}
             -Dconvertigo.engine.fullsync.couch.url=http://{{ include "convertigo.fullname" . }}-cdb:5984

@@ -75,7 +75,7 @@ As Convertigo workers require "sticky" sessions we need some specific nginx anno
 
 ## Amazon EKS Storage class
 
-On Amazon EKS you can define the gp3 storage class this way
+On Amazon EKS you can define the gp3 storage class this way for Containers needing EBS volumes.
 
 ```code
 apiVersion: storage.k8s.io/v1
@@ -95,8 +95,37 @@ baserow.persitentVolume.storageClass: gp3
 couchdb.persitentVolume.storageClass: gp3
 timescaledb.persitentVolume.storageClass: gp3
 ```
-
 in values.yaml
+
+## Using Multiple replicas of Convertigo on EKS
+
+Convertigo can be scaled up using multiple replicas. To do this they will have to share the same workspace. This can be achived using an ReadManyWriteMany EFS storage class. You will need to define an **ef-sc** storage class this way
+
+```
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+parameters:
+  basePath: /dynamic_provisioning
+  directoryPerms: '700'
+  ensureUniqueDirectory: 'true'
+  fileSystemId: <EFS file system ID>
+  gidRangeEnd: '2000'
+  gidRangeStart: '1000'
+  provisioningMode: efs-ap
+  reuseAccessPoint: 'false'
+  subPathPattern: ${.PVC.namespace}/${.PVC.name}
+provisioner: efs.csi.aws.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+``` 
+Where *EFS file system ID* is the  the fs ID of the EFS you have created.
+
+Then configure Convertigo's workspace volume claim this way 
+```
+workspace.persitentVolume.storageClass: efs-sc
+```
 
 ## Install AWS Nginx ingress controller with internet facing Load Balancer
 

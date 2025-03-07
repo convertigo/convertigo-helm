@@ -13,42 +13,11 @@ data:
     CONFIG_DIR="$WORKSPACE/configuration"
     BASEROW_DIR="$PROJECTS_DIR/BaserowIntegration"
 
-    # Check if installation is already done
-    echo "Check if installation is already done..."
-    ls -l
-
-    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" && -d "$BASEROW_DIR" ]]; then
-        echo "Installation already exists. Skipping setup."
-        exit 0
-    fi
-
-    # Ensure required directories exist
-    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
-
-    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car \
-        -o "$PROJECTS_DIR/C8Oforms.car"
-
-    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.11/lib_BaseRow.car \
-        -o "$PROJECTS_DIR/lib_BaseRow.car"
-
-    if [[ ! -d "$BASEROW_DIR" ]]; then
-        mkdir -p "$BASEROW_DIR"
-        curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.tar.gz | \
-            tar xvz --strip-components=1 -C "$BASEROW_DIR"
-    fi
-
-    # Extract .car files only if they haven’t been extracted
-    cd "$PROJECTS_DIR"
-    for file in *.car; do
-        DIR_NAME="${file%.car}"
-        if [[ ! -d "$DIR_NAME" ]]; then
-            unzip -o "$file"
-        fi
-    done
-
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
     if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
+        echo "No Symbols found, generating Symbols"
+        mkdir configuration
         cat > "$GLOBAL_SYMBOLS" << EOF
     C8Oforms.baserow.iframe=http://{{ .Values.public_addr }}/convertigo/projects/BaserowIntegration/c8o/
     lib_baserow.https=false
@@ -99,6 +68,37 @@ data:
     lib_producttour.weglot_api_key=
     EOF
     fi
+
+    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" && -d "$BASEROW_DIR" ]]; then
+        echo "Installation already exists. Skipping setup."
+        exit 0
+    fi
+
+    # Ensure required directories exist
+
+    echo "Installing Convertigo projects from GitHub, be sure you have acess to the internet"
+    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
+
+    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car \
+        -o "$PROJECTS_DIR/C8Oforms.car"
+
+    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.11/lib_BaseRow.car \
+        -o "$PROJECTS_DIR/lib_BaseRow.car"
+
+    if [[ ! -d "$BASEROW_DIR" ]]; then
+        mkdir -p "$BASEROW_DIR"
+        curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.tar.gz | \
+            tar xvz --strip-components=1 -C "$BASEROW_DIR"
+    fi
+
+    # Extract .car files only if they haven’t been extracted
+    cd "$PROJECTS_DIR"
+    for file in *.car; do
+        DIR_NAME="${file%.car}"
+        if [[ ! -d "$DIR_NAME" ]]; then
+            unzip -o "$file"
+        fi
+    done
 
     # Set ownership only if not already owned
     if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then

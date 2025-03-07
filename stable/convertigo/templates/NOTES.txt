@@ -1,14 +1,16 @@
 Here are the application URLS.
 
 Convertigo Platform Admin console (Default user password is admin/admin):
-http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .Values.public_addr }}/convertigo/admin
+https://{{ .Values.public_addr }}/convertigo/admin
 
 Convertigo No Code Studio (For building Citizen Dev No Code applications):
-http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .Values.public_addr }}/convertigo/projects/C8Oforms/DisplayObjects/mobile/
+https://{{ .Values.public_addr }}/convertigo/projects/C8Oforms/DisplayObjects/mobile/
 
 Convertigo Low Code Studio (For building Professional Low Code Applications)
 - Download Studio from : https://www.convertigo.com/developers/low-code-studio-setup-guide
 - Follow Setup guide
 - When deploying projects set :
-   - 'Server' to {{ .Values.public_addr }}/convertigo
-   - 'IsHttps' to {{ if $.Values.ingress.tls }}true{{ else }}false{{ end }}
+
+   - "Server" to {{ .Values.public_addr }}/convertigo
+   - "Https connexion" checked to true
+   - "Trust all certificates" checked to true (Uncheck it to false if you have a valid non autosigned certificate)

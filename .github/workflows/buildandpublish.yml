@@ -48,8 +48,8 @@ jobs:
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
           echo "Pushing Helm Chart to Amazon ECR..."          
-          helm push $LATEST_CHART oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa 
-
+          helm push convertigo-8.3.2.tgz  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa
+          
       - name: Push Helm Chart to Amazon S3
         run: |
           # Find the latest `convertigo-x.y.z.tgz` package

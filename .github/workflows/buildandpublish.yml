@@ -43,7 +43,7 @@ jobs:
           export HELM_EXPERIMENTAL_OCI=1
 
           # Login to Amazon ECR
-          echo "Login to Amazon ECR..."          
+          echo "Login to Amazon ECR... using AWSKEY_ID : ${{ secrets.AWS_ACCESS_KEY_ID }}"          
           aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository

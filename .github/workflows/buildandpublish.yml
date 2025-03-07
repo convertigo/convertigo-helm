@@ -34,6 +34,9 @@ jobs:
           LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)        
           helm push "$LATEST_CHART" oci://public.ecr.aws/m4y9m8m1
 
+      - name: Start Debug Session
+        uses: mxschmitt/action-tmate@v3
+
       - name: Push Helm Chart to Amazon ECR Marketplace
         run: |
           # Find the latest `convertigo-x.y.z.tgz` package

@@ -59,4 +59,4 @@ jobs:
           sed -i "s/^version: .*/version: 1.0.$VERSION/" Chart.yaml
           helm package .
           echo "Pushing Helm Chart to Amazon ECR..."          
-          helm push "convertigo-8.3.2-$VERSION.tgz"  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa
+          helm push "convertigo-1.0.$VERSION.tgz"  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa

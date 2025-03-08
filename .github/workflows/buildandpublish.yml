@@ -55,7 +55,7 @@ jobs:
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
           cd stable/convertigo
-          VERSION=$(date +'%Y.%m.%d-%H%M%S')
+          VERSION=$(date +'%H%M%S')
           sed -i "s/^version: .*/version: 1.0.$VERSION/" Chart.yaml
           helm package .
           echo "Pushing Helm Chart to Amazon ECR..."          

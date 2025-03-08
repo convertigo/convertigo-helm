@@ -43,7 +43,7 @@ jobs:
           helm repo index --url https://convertigo-helm-charts.s3.amazonaws.com/  .
           aws s3 cp index.yaml s3://convertigo-helm-charts/
           aws s3 cp artifacthub-repo.yml s3://convertigo-helm-charts/
-          
+
       - name: Push Helm Chart to Amazon ECR Marketplace
         run: |
           # We need to enable the OCI experimental feature in Helm
@@ -56,7 +56,7 @@ jobs:
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
           cd stable/convertigo
           VERSION=$(date +'%Y.%m.%d-%H%M%S')
-          sed -i "s/^version: .*/version: 8.3.2-$VERSION/" Chart.yaml
+          sed -i "s/^version: .*/version: 1.0.$VERSION/" Chart.yaml
           helm package .
           echo "Pushing Helm Chart to Amazon ECR..."          
           helm push "convertigo-8.3.2-$VERSION.tgz"  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa

@@ -19,7 +19,7 @@ data:
         echo "No Symbols found, generating Symbols"
         mkdir configuration
         cat > "$GLOBAL_SYMBOLS" << EOF
-    C8Oforms.baserow.iframe=http://{{ .Values.public_addr }}/convertigo/projects/BaserowIntegration/c8o/
+    C8Oforms.baserow.iframe=https://{{ .Values.public_addr }}/convertigo/projects/BaserowIntegration/c8o/
     lib_baserow.https=false
     lib_baserow.port=8000
     lib_baserow.server={{ include "convertigo.fullname" . }}-br
@@ -76,7 +76,7 @@ data:
 
     # Ensure required directories exist
 
-    echo "Installing Convertigo projects from GitHub, be sure you have acess to the internet"
+    echo "Installing Convertigo projects from GitHub, be sure you have access to the internet"
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
 
     curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car \

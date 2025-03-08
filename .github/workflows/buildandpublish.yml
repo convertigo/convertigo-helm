@@ -33,19 +33,19 @@ jobs:
           helm push "$LATEST_CHART" oci://public.ecr.aws/m4y9m8m1
           helm registry logout public.ecr.aws
 
-      - name: Push Helm Chart to Amazon ECR Marketplace
-        run: |
-          # We need to enable the OCI experimental feature in Helm
-          export HELM_EXPERIMENTAL_OCI=1
-
-          # Login to Amazon ECR
-          echo "Login to Amazon Marketplace ECR..."          
-          aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
-
-          # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
-          cd stable/convertigo
-          echo "Pushing Helm Chart to Amazon ECR..."          
-          helm push convertigo-8.3.2.tgz  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa
+#      - name: Push Helm Chart to Amazon ECR Marketplace
+#        run: |
+#          # We need to enable the OCI experimental feature in Helm
+#          export HELM_EXPERIMENTAL_OCI=1
+#
+#          # Login to Amazon ECR
+#          echo "Login to Amazon Marketplace ECR..."          
+#          aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
+#
+#          # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
+#          cd stable/convertigo
+#          echo "Pushing Helm Chart to Amazon ECR..."          
+#          helm push convertigo-8.3.2.tgz  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa
 
       - name: Push Helm Chart to Amazon S3
         run: |

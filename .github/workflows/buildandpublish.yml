@@ -43,6 +43,7 @@ jobs:
           aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
+          cd stable/convertigo
           echo "Pushing Helm Chart to Amazon ECR..."          
           helm push convertigo-8.3.2.tgz  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa
 

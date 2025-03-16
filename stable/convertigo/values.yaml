@@ -112,7 +112,7 @@ timescaledb:
   br_user: 
   persistentVolume:
     # adapt the storage class to your environment
-    storageClass: gp3
+    storageClass: ebs-sc
     size: 5Gi 
 
 
@@ -124,7 +124,7 @@ baserow:
   baserow_password: N0Passworw0rd
   persistentVolume:
     # adapt the storage class to your environment
-    storageClass: gp3
+    storageClass: ebs-sc
     size: 5Gi 
 
 
@@ -132,7 +132,7 @@ baserow:
 workspace:
   persistentVolume:
     # adapt the storage class to your environment
-    storageClass: efs-sc
+    storageClass: ebs-sc
     size: 5Gi
 
 
@@ -142,5 +142,5 @@ couchdb:
   password: fullsyncpassword
   persistentVolume:
     # adapt the storage class to your environment
-    storageClass: gp3
+    storageClass: ebs-sc
     size: 5Gi

@@ -140,7 +140,7 @@ Be sure all your subnets are tagged properly, if not the controller will not be 
 Then install the controller
 
 ```
- helm install  -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx  \
+ helm install  -n ingress-nginx ingress-nginx --create-namespace ingress-nginx/ingress-nginx  \
     --set controller.service.type=LoadBalancer \
     --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"="internet-facing" 
 ```

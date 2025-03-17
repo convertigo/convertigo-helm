@@ -19,7 +19,7 @@ fullnameOverride: ""
 
 #This must be the public DNS name the users will use to access Convertigo
 #This is used to generate the Ingress configuration
-public_addr: "k8s-ingressn-ingressn-37d9a3474d-52fcc0399504b5b8.elb.eu-west-3.amazonaws.com"
+publicAddr: "k8s-ingressn-ingressn-37d9a3474d-52fcc0399504b5b8.elb.eu-west-3.amazonaws.com"
 
 #If true, the Convertigo server will only be accessible through HTTPS
 ssl_only: "false"

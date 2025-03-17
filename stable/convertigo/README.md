@@ -32,7 +32,7 @@ Find below the values.yaml customization options :
 | image.repository | convertigo                         | the dockerhub Image repository. Customize if you want to address an other repo |
 | image.tag |                          | the image tag, Customize if you want to address a specific version. Default is latest|
 | image.jmx | 512                         | The Java memory size in Mb of a worker POD. 512Mb is minimum, 1024Mb is recommended. You can make this larger to handler more users on a given worker. The more the value is increased the more worker pods will use memory resources from the cluster|
-| public_addr | "my-public-addr"                    | This must be configured to the exact public address users will have in their browser and must match the DNS server name your ingress will define. The default setting will allow users to connect this url: `https://my-public-addr/convertigo` |
+| publicAddr | "my-public-addr"                    | This must be configured to the exact public address users will have in their browser and must match the DNS server name your ingress will define. The default setting will allow users to connect this url: `https://my-public-addr/convertigo` |
 | ingress.enabled | true                    | set to true if you want to deploy an ingress (Most of the cases)
 |ingress.className | "nginx"   |   by default we deploy an Nginx ingress. Be sure Nginx controller has been deployed to your cluster|
 | ingress.annotations| nginx Ingress annotation for handling sticky sessions | Convertigo workers need sticky sessions based on route cookie. To enable that see below the needed configuration. The default values.yaml already provides the correct configuration.|
@@ -178,4 +178,4 @@ spec:
 EOF
 ```
 
-The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *public_addr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingressn-ingress-XXXXX* AWS load balancer domain names.
+The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *publicAddr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingressn-ingress-XXXXX* AWS load balancer domain names.

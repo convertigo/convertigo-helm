@@ -37,7 +37,7 @@ spec:
               mountPath: /baserow/data
           env:
             - name: BASEROW_PUBLIC_URL
-              value: https://{{ .Values.public_addr }}
+              value: https://{{ .Values.publicAddr }}
             - name: BASEROW_EXTRA_ALLOWED_HOSTS
               value: "*"
             - name: DATABASE_HOST

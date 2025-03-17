@@ -28,11 +28,11 @@ spec:
 
   tls:
     - hosts:
-      - {{ .Values.public_addr }}
+      - {{ .Values.publicAddr }}
       secretName: convertigo-tls
 
   rules:
-    - host: {{ .Values.public_addr }}
+    - host: {{ .Values.publicAddr }}
       http:
         paths: 
           - pathType: Prefix

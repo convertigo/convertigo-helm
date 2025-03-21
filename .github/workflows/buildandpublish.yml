@@ -56,6 +56,7 @@ jobs:
           cd stable/convertigo
           # Modify repo to point to AMAZON Market place ECR (Mandatory if we want entitelement to work)
           sed -i 's|repository: convertigo|repository: 709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa/convertigo|' values.yaml
+          sed -i 's|tag: ""|tag: "8.3.3"|' values.yaml
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository. Tag it with a unique version
           VERSION=$(date +'%H%M%S')

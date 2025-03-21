@@ -53,10 +53,14 @@ jobs:
           echo "Login to Amazon Marketplace ECR..."          
           aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
 
-          # Push the chart to Amazon ECR Convertigo-SA Marketplace repository
+          # Modify repo to point to AMAZON Market place ECR (Mandatory if we want entitelement to work)
+          sed -i 's|repository: convertigo|repository: 709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa/convertigo|' values.yaml
+
+          # Push the chart to Amazon ECR Convertigo-SA Marketplace repository. Tag it with a unique version
           cd stable/convertigo
           VERSION=$(date +'%H%M%S')
           sed -i "s/^version: .*/version: 1.0.$VERSION/" Chart.yaml
+
           helm package .
           echo "Pushing Helm Chart to Amazon ECR..."          
           helm push "convertigo-1.0.$VERSION.tgz"  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa

@@ -79,10 +79,10 @@ data:
     echo "Installing Convertigo projects from GitHub, be sure you have access to the internet"
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
 
-    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta19/C8Oforms.car \
+    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta43/C8Oforms.car \
         -o "$PROJECTS_DIR/C8Oforms.car"
 
-    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.11/lib_BaseRow.car \
+    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.14/lib_BaseRow.car \
         -o "$PROJECTS_DIR/lib_BaseRow.car"
 
     if [[ ! -d "$BASEROW_DIR" ]]; then

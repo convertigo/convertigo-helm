@@ -26,32 +26,38 @@ helm install [RELEASE NAME] convertigo/convertigo --version x.y.z  -f values.yam
 
 Find below the values.yaml customization options : 
 
-|name       | default                     | usage
-|-----------|-----------------------------|--------
-| replicaCount | 1                         | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
-| image.repository | convertigo                         | the dockerhub Image repository. Customize if you want to address an other repo |
-| image.tag |                          | the image tag, Customize if you want to address a specific version. Default is latest|
-| image.jmx | 512                         | The Java memory size in Mb of a worker POD. 512Mb is minimum, 1024Mb is recommended. You can make this larger to handler more users on a given worker. The more the value is increased the more worker pods will use memory resources from the cluster|
-| publicAddr | "my-public-addr"                    | This must be configured to the exact public address users will have in their browser and must match the DNS server name your ingress will define. The default setting will allow users to connect this url: `https://my-public-addr/convertigo` |
-| ingress.enabled | true                    | set to true if you want to deploy an ingress (Most of the cases)
-|ingress.className | "nginx"   |   by default we deploy an Nginx ingress. Be sure Nginx controller has been deployed to your cluster|
-| ingress.annotations| nginx Ingress annotation for handling sticky sessions | Convertigo workers need sticky sessions based on route cookie. To enable that see below the needed configuration. The default values.yaml already provides the correct configuration.|
-|timescaledb.enabled | true         | Mandatory component for usage and licence billing. Set to false only if you want to use a timescaledb running outside of the cluster |
-|timescaledb.user | postgress   | The database user name Convertigo will use to connect to the timescaledb database.  Customize to your needs |
-|timecaledb.password | ChangeMe! | The database password Convertigo will use to connect to the timescaledb database.  Customize to your needs |
-|timecaledb.billing_database| c8oAnalytics | The database holding usage analytics data|
-|timecaledb.billing_user| c8oAnalytics | This database access username|
-|timecaledb.billing_password| c8oAnalytics |This database access password |
-|timecaledb.persistentVolume | hostpath of 5Gb | The timescale database persistent volume claim. Customize here to use Volume claims for your cluster provider. See below some sample volume claims |
-|workspace.persistentVolume | hostpath of 5Gb | The Convertigo  workspace persistent volume claim. This is where deployed Low Code projects configuration will be persisted. In a multiple worker cluster this must be shared among all Convertigo  worker pods. This is why you should use a read-many/write-many capable storageClass here. Customize here to use Volume claims for your cluster provider. See below some sample volume claims |
-|couchdb.admin | admin    | the CouchDB NoSQL database admin user. This database is used by Convertigo to store account configuration, perform all offline features and hold all the No Code studio projects and definitions. |
-|couchdb.password | fullsyncpassord    | the CouchDB NoSQL database admin password. |
-|couchdb.persistentVolume | hostpath of 5Gb | The CouchDB NoSQL database persistent volume claim. Customize here to use Volume claims for your cluster provider. See below some sample volume claims |
-|baserow.enabled| true |  Set to true if you want to use the integrated Baserow No Code database for No Code Studio. It will provide data sources and Actions to the No Code applications. This database can also be used in Low Code applications for storing and handling data. | 
-|baserow.baserow_db | baserow | The Postgres SQL database base name Baesrow will use and create automaticallly
-|baserow.baserow_user| baserow | The Postgres SQL database access user name |
-|baserow.baserow_password|N0Passworw0rd | The Postgres SQL database access password | 
-|baserow.persistentVolume| hostpath of 5Gb | The baserow No Code  database persistent volume claim. Customize here to use Volume claims for your cluster provider. See below some sample volume claims |
+| name                              | default                | usage |
+|-----------------------------------|------------------------|-------|
+| replicaCount                      | 1                      | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
+| image.repository                  | convertigo             | The Docker image repository. Customize if you want to use another repository. |
+| image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is `latest`. |
+| image.jmx                         | 512                    | The Java memory size in MB for a worker pod. 512 MB is minimum; 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
+| publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
+| ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
+| ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
+| ingress.annotations               |                        | Nginx ingress annotations for handling sticky sessions. Convertigo workers need sticky sessions based on route cookies. Default `values.yaml` provides the correct setup. |
+| timescaledb.enabled               | true                   | Required for usage and license billing. Set to false only if using an external TimescaleDB. |
+| timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
+| timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
+| timescaledb.user                  | postgres               | Database username Convertigo will use to connect to TimescaleDB. Customize as needed. |
+| timescaledb.password              | ChangeMe!              | Database password Convertigo will use to connect to TimescaleDB. Customize as needed. |
+| timescaledb.billing_database      | c8oAnalytics           | Database name for storing usage analytics data. |
+| timescaledb.billing_user          | c8oAnalytics           | Username for accessing the billing database. |
+| timescaledb.billing_password      | c8oAnalytics           | Password for accessing the billing database. |
+| timescaledb.persistentVolume      | hostpath of 5Gb        | Persistent volume claim for TimescaleDB. Customize for your cluster provider (samples provided below). |
+| workspace.persistentVolume        | hostpath of 5Gb        | Persistent volume claim for the Convertigo workspace. Must support ReadMany/WriteMany in a multi-worker setup. Customize for your provider. |
+| couchdb.image.repository          | couchdb                | TimescaleDB image repository. Customize if using another repository. |
+| couchdb.image.tag                 | 3.4.2                  | TimescaleDB image tag. Customize if using a specific version. |
+| couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
+| couchdb.password                  | fullsyncpassword       | CouchDB admin password. |
+| couchdb.persistentVolume          | hostpath of 5Gb        | Persistent volume claim for CouchDB. Customize for your cluster provider. |
+| baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
+| baserow.image.repository          | baserow/baserow        | TimescaleDB image repository. Customize if using another repository. |
+| baserow.image.tag                 | 1.30.1                 | TimescaleDB image tag. Customize if using a specific version. |
+| baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
+| baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
+| baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
+| baserow.persistentVolume          | hostpath of 5Gb        | Persistent volume claim for the Baserow database. Customize for your cluster provider. |
 
 ## Needed annotations for nginx
 

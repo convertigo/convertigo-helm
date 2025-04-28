@@ -79,26 +79,8 @@ data:
     echo "Installing Convertigo projects from GitHub, be sure you have access to the internet"
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
 
-    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta43/C8Oforms.car \
-        -o "$PROJECTS_DIR/C8Oforms.car"
-
-    curl -L https://github.com/convertigo/c8oprj-lib-baserow/releases/download/1.1.14/lib_BaseRow.car \
-        -o "$PROJECTS_DIR/lib_BaseRow.car"
-
-    if [[ ! -d "$BASEROW_DIR" ]]; then
-        mkdir -p "$BASEROW_DIR"
-        curl -L https://github.com/convertigo/c8oprj-baserowintegration/archive/refs/tags/c8oforms-2.1.0.tar.gz | \
-            tar xvz --strip-components=1 -C "$BASEROW_DIR"
-    fi
-
-    # Extract .car files only if they haven’t been extracted
-    cd "$PROJECTS_DIR"
-    for file in *.car; do
-        DIR_NAME="${file%.car}"
-        if [[ ! -d "$DIR_NAME" ]]; then
-            unzip -o "$file"
-        fi
-    done
+    curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta59/c8oforms_standalone.tar.gz | \
+        tar xvz --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
 
     # Set ownership only if not already owned
     if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then

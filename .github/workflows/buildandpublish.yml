@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -27,7 +27,7 @@ jobs:
         run: |
           # Find the latest `convertigo-x.y.z.tgz` package
           cd stable/convertigo
-          LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)        
+          LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)
 
           aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws
           helm push "$LATEST_CHART" oci://public.ecr.aws/m4y9m8m1
@@ -40,7 +40,7 @@ jobs:
           cd stable/convertigo
           LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)
           aws s3 cp "$LATEST_CHART" s3://convertigo-helm-charts/
-          helm repo index --url https://convertigo-helm-charts.s3.amazonaws.com/  .
+          helm repo index --url https://convertigo-helm-charts.s3.amazonaws.com/ .
           aws s3 cp index.yaml s3://convertigo-helm-charts/
           aws s3 cp artifacthub-repo.yml s3://convertigo-helm-charts/
 
@@ -50,20 +50,27 @@ jobs:
           export HELM_EXPERIMENTAL_OCI=1
 
           # Login to Amazon ECR
-          echo "Login to Amazon Marketplace ECR..."          
+          echo "Login to Amazon Marketplace ECR..."
           aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
 
           cd stable/convertigo
           # Modify repo to point to AMAZON Market place ECR (Mandatory if we want entitelement to work)
-          sed -i 's|repository: convertigo|repository: 709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa/convertigo|' values.yaml
+          # sed -i 's|repository: convertigo|repository: 709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa/convertigo|' values.yaml
+
+          # Find the latest chart
+          LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)
+
+          # Extract version x.y.z
+          CHART_VERSION=$(echo "$LATEST_CHART" | sed -E 's/convertigo-([0-9]+\.[0-9]+\.[0-9]+)\.tgz/\1/')
+          echo "Detected Chart Version: $CHART_VERSION"
 
           #and set tag
           sed -i 's|tag: ""|tag: "8.3.3"|' values.yaml
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository. Tag it with a unique version
-          VERSION=$(date +'%H%M%S'  | sed 's/^0*//')
+          VERSION=$(date +'%H%M%S' | sed 's/^0*//')
           sed -i "s/^version: .*/version: 1.0.$VERSION/" Chart.yaml
 
           helm package .
-          echo "Pushing Helm Chart to Amazon ECR..."          
-          helm push "convertigo-1.0.$VERSION.tgz"  oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa
+          echo "Pushing Helm Chart to Amazon ECR..."
+          helm push "convertigo-1.0.$VERSION.tgz" oci://709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa

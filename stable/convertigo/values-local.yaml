@@ -19,7 +19,7 @@ fullnameOverride: ""
 
 #This must be the public DNS name the users will use to access Convertigo
 #This is used to generate the Ingress configuration
-publicAddr: "fuseus"
+publicAddr: "localhost"
 
 #If true, the Convertigo server will only be accessible through HTTPS
 ssl_only: "false"
@@ -58,6 +58,7 @@ ingress:
   annotations: 
     kubernetes.io/ingress.class: nginx
     kubernetes.io/tls-acme: "true"
+
     nginx.ingress.kubernetes.io/affinity: "cookie"
     nginx.ingress.kubernetes.io/affinity-mode: "persistent"
     nginx.ingress.kubernetes.io/session-cookie-name: "route"
@@ -69,10 +70,10 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      if ($request_uri = "/") {
+        return 301 /convertigo/;
+      }
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -103,6 +104,9 @@ affinity: {}
 # ====== timescaledb ========== This will be used to hold NoC ode database and metrics data usage is mandatory ====
 timescaledb:
   enabled: true
+  image:
+    repository: timescale/timescaledb
+    tag: latest-pg16
   user: postgres
   password: ChangeMe!
   billing_database: c8oAnalytics
@@ -118,6 +122,9 @@ timescaledb:
 # ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
 baserow:
   enabled: true
+  image:
+    repository: baserow/baserow
+    tag: 1.30.1
   baserow_db : basereow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
@@ -137,6 +144,9 @@ workspace:
 
 # ====== Couchdb ========== This is the No SQL database used by Convertigo =========================================
 couchdb:
+  image:
+    repository: couchdb
+    tag: 3.4.2
   admin: admin
   password: fullsyncpassword
   persistentVolume:

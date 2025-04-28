@@ -34,7 +34,7 @@ spec:
         - name: {{ .Chart.Name }}-timescaledb
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "timescale/timescaledb:latest-pg16"
+          image: {{ .Values.timescaledb.image.repository }}:{{ .Values.timescaledb.image.tag }}
           volumeMounts:
             - name: timescaledb-data
               mountPath: /var/lib/postgresql/data

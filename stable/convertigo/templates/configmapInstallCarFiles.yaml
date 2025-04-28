@@ -82,6 +82,20 @@ data:
     curl -L https://github.com/convertigo/C8oForms/releases/download/2.1.0-beta59/c8oforms_standalone.tar.gz | \
         tar xvz --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
 
+    if curl --connect-timeout 1 -s http://169.254.169.254/latest/meta-data/ >/dev/null; then
+        echo "This is an AWS EC2 instance" 
+        DEST_DIR="$PROJECTS_DIR/AwsMetering"
+        TMP_DIR=$(mktemp -d)
+        ZIP_URL="https://github.com/convertigo/c8oprj-aws-metering/archive/refs/heads/master.zip"
+
+        mkdir -p "$DEST_DIR"
+        curl -L "$ZIP_URL" -o "$TMP_DIR/archive.zip"
+        unzip "$TMP_DIR/archive.zip" -d "$TMP_DIR"
+        EXTRACTED_DIR=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d)
+        cp -R "$EXTRACTED_DIR/"* "$DEST_DIR/"
+        rm -rf "$TMP_DIR"
+    fi
+
     # Set ownership only if not already owned
     if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
         chown -R convertigo:convertigo "$PROJECTS_DIR"

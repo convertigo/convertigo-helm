@@ -6,6 +6,8 @@
 #You can scale up or down this number depending on your needs
 replicaCount: 1
 
+rootRedirect: /convertigo/
+
 image:
   repository: convertigo
   pullPolicy: IfNotPresent
@@ -74,11 +76,6 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: 500m
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      if ($request_uri = "/") {
-        return 301 /convertigo/;
-      }
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious

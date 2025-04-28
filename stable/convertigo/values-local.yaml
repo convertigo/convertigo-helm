@@ -6,6 +6,8 @@
 #You can scale up or down this number depending on your needs
 replicaCount: 1
 
+rootRedirect: /convertigo/
+
 image:
   repository: convertigo
   pullPolicy: IfNotPresent
@@ -19,7 +21,7 @@ fullnameOverride: ""
 
 #This must be the public DNS name the users will use to access Convertigo
 #This is used to generate the Ingress configuration
-publicAddr: "localhost"
+publicAddr: localhost
 
 #If true, the Convertigo server will only be accessible through HTTPS
 ssl_only: "false"
@@ -54,7 +56,7 @@ service:
 #Configure your Ingress here. Thjis default configuration is for NGINX Ingress. Be sure your ingress suports Sticky sessions
 ingress:
   enabled: true
-  className: "nginx"
+  className: nginx
   annotations: 
     kubernetes.io/ingress.class: nginx
     kubernetes.io/tls-acme: "true"
@@ -69,11 +71,6 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: 500m
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      if ($request_uri = "/") {
-        return 301 /convertigo/;
-      }
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious

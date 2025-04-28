@@ -1,0 +1,45 @@
+{{- if .Values.ingress.enabled -}}
+{{- $fullName := include "convertigo.fullname" . -}}
+{{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
+  {{- end }}
+{{- end }}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ $fullName }}-root
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/permanent-redirect: {{ default "/convertigo/" .Values.rootRedirect }}
+    nginx.ingress.kubernetes.io/permanent-redirect-code: "301"
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+spec:
+  {{- if and .Values.ingress.className (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion) }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+
+  tls:
+    - hosts:
+      - {{ .Values.publicAddr }}
+      secretName: convertigo-tls
+
+  rules:
+    - host: {{ .Values.publicAddr }}
+      http:
+        paths: 
+          - pathType: Exact
+            path: /
+            backend:
+              service:
+                name:  {{ include "convertigo.fullname" . }}
+                port:
+                  number: 28080
+{{- end }}

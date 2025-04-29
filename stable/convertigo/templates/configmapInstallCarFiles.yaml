@@ -96,6 +96,9 @@ data:
         rm -rf "$TMP_DIR"
     fi
 
+    # Force 8.3.x instead of 8.4.x
+    find $PROJECTS_DIR -mindepth 2 -maxdepth 2 -type f -name "c8oProject.yaml" -exec sed -i 's/convertigo: 8\.4\./convertigo: 8.3./' {} +
+
     # Set ownership only if not already owned
     if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
         chown -R convertigo:convertigo "$PROJECTS_DIR"

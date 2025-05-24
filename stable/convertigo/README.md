@@ -36,6 +36,7 @@ Find below the values.yaml customization options :
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
 | ingress.annotations               |                        | Nginx ingress annotations for handling sticky sessions. Convertigo workers need sticky sessions based on route cookies. Default `values.yaml` provides the correct setup. |
+| nocodestudio.version              | 2.1.0-beta84           | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | timescaledb.enabled               | true                   | Required for usage and license billing. Set to false only if using an external TimescaleDB. |
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
 | timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |

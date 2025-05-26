@@ -65,7 +65,7 @@ jobs:
           echo "Detected Chart Version: $CHART_VERSION"
 
           #and set tag
-          sed -i 's|tag: ""|tag: "8.3.3"|' values.yaml
+          sed -i 's|tag: ""|tag: "8.3"|' values.yaml
 
           # Push the chart to Amazon ECR Convertigo-SA Marketplace repository. Tag it with a unique version
           VERSION=$(date +'%H%M%S' | sed 's/^0*//')

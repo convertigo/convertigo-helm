@@ -54,8 +54,6 @@ jobs:
           aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
 
           cd stable/convertigo
-          # Modify repo to point to AMAZON Market place ECR (Mandatory if we want entitelement to work)
-          # sed -i 's|repository: convertigo|repository: 709825985650.dkr.ecr.us-east-1.amazonaws.com/convertigo-sa/convertigo|' values.yaml
 
           # Find the latest chart
           LATEST_CHART=$(ls -v convertigo-*.tgz | tail -n 1)

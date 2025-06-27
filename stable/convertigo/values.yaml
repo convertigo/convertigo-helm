@@ -104,7 +104,7 @@ affinity: {}
 
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
-    version: "2.1.0-beta84"
+    version: "2.1.0-beta107"
 
 # ====== timescaledb ========== This will be used to hold NoC ode database and metrics data usage is mandatory ====
 timescaledb:

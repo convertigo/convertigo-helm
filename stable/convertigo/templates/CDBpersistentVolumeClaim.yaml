@@ -6,7 +6,9 @@ metadata:
     "helm.sh/resource-policy": keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    {{- range (default (list "ReadWriteOnce") .Values.couchdb.accessModes) }}
+    - {{ . }}
+    {{- end }}
   resources:
     requests:
       storage: "{{ .Values.couchdb.persistentVolume.size }}"

@@ -7,7 +7,9 @@ metadata:
     "helm.sh/resource-policy": keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    {{- range (default (list "ReadWriteOnce") .Values.baserow.accessModes) }}
+    - {{ . }}
+    {{- end }}
   resources:
     requests:
       storage: "{{ .Values.baserow.persistentVolume.size }}"

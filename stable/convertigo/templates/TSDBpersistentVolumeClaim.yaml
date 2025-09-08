@@ -7,7 +7,9 @@ metadata:
     "helm.sh/resource-policy": keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    {{- range (default (list "ReadWriteOnce") .Values.timescaledb.accessModes) }}
+    - {{ . }}
+    {{- end }}
   resources:
     requests:
       storage: "{{ .Values.timescaledb.persistentVolume.size }}"

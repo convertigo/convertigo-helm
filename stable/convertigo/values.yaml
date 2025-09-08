@@ -115,6 +115,31 @@ workspace:
 nocodestudio:
     version: "2.1.0-beta107"
 
+# ====== Convertigo service probes (liveness/readiness) ======================
+readinessProbe:
+  # If exec.command is provided, the template will use exec to validate readiness (allows checking response body).
+  # Otherwise httpGet will be used.
+  exec:
+    # example: checks that the body contains convertigo.started=OK
+    command: ["sh", "-c", "curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+  httpGet:
+    path: /convertigo/admin/services/engine.Supervision
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+livenessProbe:
+  httpGet:
+    path: /convertigo/admin/services/engine.Supervision
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
 # ====== timescaledb ========== This will be used to hold NoCode database and metrics data usage is mandatory ====
 timescaledb:
   enabled: true

@@ -11,7 +11,7 @@ rootRedirect: /convertigo/
 image:
   repository: convertigo
   pullPolicy: IfNotPresent
-  jxmx: "512"
+  jxmx: "1024"
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
@@ -77,17 +77,17 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
-resources: {}
+resources:
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # lines and adjust them as necessary.
   # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
+  #   cpu: 2000m
+  #   memory: 2048Mi
   # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+  #   cpu: 500m
+  #   memory: 1024Mi
 
 autoscaling:
   enabled: false
@@ -102,11 +102,20 @@ tolerations: []
 
 affinity: {}
 
+# ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
+workspace:
+  persistentVolume:
+    # adapt the storage class to your environment
+    storageClass: ebs-sc
+    size: 5Gi
+  accessModes:
+    - ReadWriteOnce
+
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
     version: "2.1.0-beta107"
 
-# ====== timescaledb ========== This will be used to hold NoC ode database and metrics data usage is mandatory ====
+# ====== timescaledb ========== This will be used to hold NoCode database and metrics data usage is mandatory ====
 timescaledb:
   enabled: true
   image:
@@ -124,7 +133,13 @@ timescaledb:
     size: 5Gi 
   accessModes:
     - ReadWriteOnce
-
+  resources:
+    # limits:
+    #   cpu: 300m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 150m
+    #   memory: 256Mi
 
 # ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
 baserow:
@@ -141,16 +156,13 @@ baserow:
     size: 5Gi
   accessModes:
     - ReadWriteOnce
-
-# ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
-workspace:
-  persistentVolume:
-    # adapt the storage class to your environment
-    storageClass: ebs-sc
-    size: 5Gi
-  accessModes:
-    - ReadWriteOnce
-
+  resources:
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
 
 # ====== Couchdb ========== This is the No SQL database used by Convertigo =========================================
 couchdb:
@@ -165,3 +177,10 @@ couchdb:
     size: 5Gi
   accessModes:
     - ReadWriteOnce
+  resources:
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi

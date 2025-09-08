@@ -63,6 +63,8 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 5432
+          resources:
+            {{- toYaml .Values.timescaledb.resources | nindent 12 }}
           livenessProbe:
             tcpSocket:
               port: 5432

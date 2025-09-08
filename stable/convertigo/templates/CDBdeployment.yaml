@@ -42,6 +42,8 @@ spec:
             - name: http
               containerPort: 5984
               protocol: TCP
+          resources:
+            {{- toYaml .Values.couchdb.resources | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /_utils

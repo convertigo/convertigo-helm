@@ -55,4 +55,6 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
+          resources:
+            {{- toYaml .Values.baserow.resources | nindent 12 }}
 {{- end }}                

@@ -30,8 +30,8 @@ Find below the values.yaml customization options :
 |-----------------------------------|------------------------|-------|
 | replicaCount                      | 1                      | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
 | image.repository                  | convertigo             | The Docker image repository. Customize if you want to use another repository. |
-| image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is `latest`. |
-| image.jmx                         | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
+| image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
+| image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | nocodestudio.version              | 2.1.1                  | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
@@ -40,7 +40,7 @@ Find below the values.yaml customization options :
 | resources                         | {}                     | Convertigo resources restriction. |
 | workspace.persistentVolume.storageClass | ebs-sc           | StorageClass for Convertigo workspace PVC. |
 | workspace.persistentVolume.size   | 5Gi                    | PVC size for Convertigo workspace. |
-| workspace.persistentVolume.accessModes | ["ReadWriteOnce"] | AccessModes for Convertigo workspace PVC. |
+| workspace.accessModes             | ["ReadWriteOnce"]      | AccessModes for Convertigo workspace PVC. |
 | timescaledb.enabled               | true                   | Required for usage and license billing. Set to false only if using an external TimescaleDB. |
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
 | timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
@@ -53,17 +53,17 @@ Find below the values.yaml customization options :
 | timescaledb.persistentVolume.size         | 5Gi            | TimescaleDB PVC size. |
 | timescaledb.accessModes                   | ["ReadWriteOnce"] | TimescaleDB PVC accessModes. |
 | timescaledb.resources                           | {}       | Resources restriction for timescaledb. |
-| couchdb.image.repository          | couchdb                | TimescaleDB image repository. Customize if using another repository. |
-| couchdb.image.tag                 | 3.4.2                  | TimescaleDB image tag. Customize if using a specific version. |
+| couchdb.image.repository          | couchdb                | CouchDB image repository. Customize if using another repository. |
+| couchdb.image.tag                 | 3.4.2                  | CouchDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
 | couchdb.password                  | fullsyncpassword       | CouchDB admin password. |
 | couchdb.persistentVolume.storageClass | ebs-sc             | CouchDB PVC storageClass. |
-| couchdb.persistentVolume.size         | 5Gi                | CouchDB PVC size. |
-| couchdb.accessModes  | ["ReadWriteOnce"]  | CouchDB PVC accessModes. |
-| couchdb.resources                     | {}                 | Resources restriction for couchdb. |
+| couchdb.persistentVolume.size     | 5Gi                    | CouchDB PVC size. |
+| couchdb.accessModes               | ["ReadWriteOnce"]      | CouchDB PVC accessModes. |
+| couchdb.resources                 | {}                     | Resources restriction for couchdb. |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
-| baserow.image.repository          | baserow/baserow        | TimescaleDB image repository. Customize if using another repository. |
-| baserow.image.tag                 | 1.30.1                 | TimescaleDB image tag. Customize if using a specific version. |
+| baserow.image.repository          | baserow/baserow        | Baserow image repository. Customize if using another repository. |
+| baserow.image.tag                 | 1.30.1                 | Baserow image tag. Customize if using a specific version. |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
 | baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
@@ -74,7 +74,7 @@ Find below the values.yaml customization options :
 
 Notes on probes:
 - Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
-  Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+  Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
 - If exec is not provided or not supported by the image, the chart falls back to httpGet (ensure port name/number matches container ports).
 - Exec probes require shell + curl + grep in the image; otherwise prefer httpGet.
 
@@ -116,15 +116,15 @@ volumeBindingMode: Immediate
 
 And configure 
 ```
-baserow.persitentVolume.storageClass: gp3
-couchdb.persitentVolume.storageClass: gp3
-timescaledb.persitentVolume.storageClass: gp3
+baserow.persistentVolume.storageClass: gp3
+couchdb.persistentVolume.storageClass: gp3
+timescaledb.persistentVolume.storageClass: gp3
 ```
 in values.yaml
 
 ## Using Multiple replicas of Convertigo on EKS
 
-Convertigo can be scaled up using multiple replicas. To do this they will have to share the same workspace. This can be achived using an ReadManyWriteMany EFS storage class. You will need to define an **ef-sc** storage class this way
+Convertigo can be scaled up using multiple replicas. To do this they will have to share the same workspace. This can be achieved using an ReadManyWriteMany EFS storage class. You will need to define an **efs-sc** storage class this way
 
 ```
 apiVersion: storage.k8s.io/v1
@@ -145,16 +145,16 @@ provisioner: efs.csi.aws.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
 ``` 
-Where *EFS file system ID* is the  the fs ID of the EFS you have created.
+Where *EFS file system ID* is the fs ID of the EFS you have created.
 
 Then configure Convertigo's workspace volume claim this way 
 ```
-workspace.persitentVolume.storageClass: efs-sc
+workspace.persistentVolume.storageClass: efs-sc
 ```
 
 ## Install AWS Nginx ingress controller with internet facing Load Balancer
 
-If it is not already done, When running on AWS you must create the Ingress controller **BEFORE** installing Convertigo HELM chart because you will need to configure in the values.yaml the DNS public address AWS Load Balancer created for you.
+If it is not already done, when running on AWS you must create the Ingress controller **BEFORE** installing Convertigo HELM chart because you will need to configure in the values.yaml the DNS public address AWS Load Balancer created for you.
 
 Be sure all your subnets are tagged properly, if not the controller will not be able to create the internet facing load balancer. for each of you subnets do
 
@@ -203,4 +203,4 @@ spec:
 EOF
 ```
 
-The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *publicAddr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingressn-ingress-XXXXX* AWS load balancer domain names.
+The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *publicAddr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingress-ingress-XXXXX* AWS load balancer domain names.

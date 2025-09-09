@@ -15,6 +15,10 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
+# ====== Convertigo NoCode Studio ==============
+nocodestudio:
+    version: "2.1.1"
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -110,10 +114,6 @@ workspace:
     size: 5Gi
   accessModes:
     - ReadWriteOnce
-
-# ====== Convertigo NoCode Studio ==============
-nocodestudio:
-    version: "2.1.0-beta107"
 
 # ====== Convertigo service probes (liveness/readiness) ======================
 readinessProbe:

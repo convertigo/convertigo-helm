@@ -31,12 +31,16 @@ Find below the values.yaml customization options :
 | replicaCount                      | 1                      | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
 | image.repository                  | convertigo             | The Docker image repository. Customize if you want to use another repository. |
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is `latest`. |
-| image.jmx                         | 512                    | The Java memory size in MB for a worker pod. 512 MB is minimum; 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
+| image.jmx                         | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
+| nocodestudio.version              | 2.1.1                  | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
 | ingress.annotations               |                        | Nginx ingress annotations for handling sticky sessions. Convertigo workers need sticky sessions based on route cookies. Default `values.yaml` provides the correct setup. |
-| nocodestudio.version              | 2.1.0-beta84           | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
+| resources                         | {}                     | Convertigo resources restriction. |
+| workspace.persistentVolume.storageClass | ebs-sc           | StorageClass for Convertigo workspace PVC. |
+| workspace.persistentVolume.size   | 5Gi                    | PVC size for Convertigo workspace. |
+| workspace.persistentVolume.accessModes | ["ReadWriteOnce"] | AccessModes for Convertigo workspace PVC. |
 | timescaledb.enabled               | true                   | Required for usage and license billing. Set to false only if using an external TimescaleDB. |
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
 | timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
@@ -45,20 +49,34 @@ Find below the values.yaml customization options :
 | timescaledb.billing_database      | c8oAnalytics           | Database name for storing usage analytics data. |
 | timescaledb.billing_user          | c8oAnalytics           | Username for accessing the billing database. |
 | timescaledb.billing_password      | c8oAnalytics           | Password for accessing the billing database. |
-| timescaledb.persistentVolume      | hostpath of 5Gb        | Persistent volume claim for TimescaleDB. Customize for your cluster provider (samples provided below). |
-| workspace.persistentVolume        | hostpath of 5Gb        | Persistent volume claim for the Convertigo workspace. Must support ReadMany/WriteMany in a multi-worker setup. Customize for your provider. |
+| timescaledb.persistentVolume.storageClass | ebs-sc         | TimescaleDB PVC storageClass. |
+| timescaledb.persistentVolume.size         | 5Gi            | TimescaleDB PVC size. |
+| timescaledb.accessModes                   | ["ReadWriteOnce"] | TimescaleDB PVC accessModes. |
+| timescaledb.resources                           | {}       | Resources restriction for timescaledb. |
 | couchdb.image.repository          | couchdb                | TimescaleDB image repository. Customize if using another repository. |
 | couchdb.image.tag                 | 3.4.2                  | TimescaleDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
 | couchdb.password                  | fullsyncpassword       | CouchDB admin password. |
-| couchdb.persistentVolume          | hostpath of 5Gb        | Persistent volume claim for CouchDB. Customize for your cluster provider. |
+| couchdb.persistentVolume.storageClass | ebs-sc             | CouchDB PVC storageClass. |
+| couchdb.persistentVolume.size         | 5Gi                | CouchDB PVC size. |
+| couchdb.accessModes  | ["ReadWriteOnce"]  | CouchDB PVC accessModes. |
+| couchdb.resources                     | {}                 | Resources restriction for couchdb. |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
 | baserow.image.repository          | baserow/baserow        | TimescaleDB image repository. Customize if using another repository. |
 | baserow.image.tag                 | 1.30.1                 | TimescaleDB image tag. Customize if using a specific version. |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
 | baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
-| baserow.persistentVolume          | hostpath of 5Gb        | Persistent volume claim for the Baserow database. Customize for your cluster provider. |
+| baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
+| baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
+| baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
+| baserow.resources                     | {}                 | Resources restriction for baserow. |
+
+Notes on probes:
+- Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
+  Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+- If exec is not provided or not supported by the image, the chart falls back to httpGet (ensure port name/number matches container ports).
+- Exec probes require shell + curl + grep in the image; otherwise prefer httpGet.
 
 ## Needed annotations for nginx
 

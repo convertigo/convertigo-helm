@@ -78,7 +78,22 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
-| baserow.resources                     | {}                 | Resources restriction for baserow. |JVM flags or overrides for bundled properties. |
+| baserow.resources                     | {}                 | Resources restriction for baserow. |
+
+## External CouchDB example
+
+To reuse an existing CouchDB cluster, disable the bundled component and point the chart to your endpoint:
+
+```bash
+helm upgrade --install convertigo ./stable/convertigo \
+  --set couchdb.enabled=false \
+  --set couchdb.urlOverride=https://my-couchdb:6984 \
+  --set couchdb.existingSecret=my-couch-secrets \
+  --set couchdb.existingSecretUsernameKey=username \
+  --set couchdb.existingSecretPasswordKey=password
+```
+
+If the secret might be missing, add `--set couchdb.existingSecretOptional=true` to fall back to inline credentials.
 
 Notes on probes:
 - Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":

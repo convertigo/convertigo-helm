@@ -32,6 +32,7 @@ Find below the values.yaml customization options :
 | image.repository                  | convertigo             | The Docker image repository. Customize if you want to use another repository. |
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
+| additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom 
 | nocodestudio.version              | 2.1.1                  | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
@@ -53,6 +54,13 @@ Find below the values.yaml customization options :
 | timescaledb.persistentVolume.size         | 5Gi            | TimescaleDB PVC size. |
 | timescaledb.accessModes                   | ["ReadWriteOnce"] | TimescaleDB PVC accessModes. |
 | timescaledb.resources                           | {}       | Resources restriction for timescaledb. |
+| couchdb.enabled                   | true                   | Set to false when using an external CouchDB instance; skips deploying the bundled database and related resources. |
+| couchdb.urlOverride               |                        | Optional full CouchDB URL (including protocol and port) for Convertigo to use instead of the internal service. |
+| couchdb.existingSecret            |                        | Name of an existing secret providing CouchDB credentials (same namespace by default). |
+| couchdb.existingSecretNamespace   |                        | Namespace of the existing CouchDB credentials secret (defaults to the release namespace). |
+| couchdb.existingSecretUsernameKey |                        | Key inside the existing secret for the CouchDB username. |
+| couchdb.existingSecretPasswordKey |                        | Key inside the existing secret for the CouchDB password. |
+| couchdb.existingSecretOptional    | false                  | Set to true to ignore missing/invalid existing secrets and fall back to inline values. |
 | couchdb.image.repository          | couchdb                | CouchDB image repository. Customize if using another repository. |
 | couchdb.image.tag                 | 3.4.2                  | CouchDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
@@ -70,7 +78,7 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
-| baserow.resources                     | {}                 | Resources restriction for baserow. |
+| baserow.resources                     | {}                 | Resources restriction for baserow. |JVM flags or overrides for bundled properties. |
 
 Notes on probes:
 - Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":

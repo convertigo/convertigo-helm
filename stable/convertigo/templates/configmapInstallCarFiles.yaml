@@ -12,6 +12,7 @@ data:
     PROJECTS_DIR="$WORKSPACE/projects"
     CONFIG_DIR="$WORKSPACE/configuration"
     BASEROW_DIR="$PROJECTS_DIR/BaserowIntegration"
+    BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
 
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
@@ -69,9 +70,16 @@ data:
     EOF
     fi
 
-    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" && -d "$BASEROW_DIR" ]]; then
-        echo "Installation already exists. Skipping setup."
-        exit 0
+    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" ]]; then
+        if [[ "$BASEROW_ENABLED" == "true" ]]; then
+            if [[ -d "$BASEROW_DIR" ]]; then
+                echo "Installation already exists. Skipping setup."
+                exit 0
+            fi
+        else
+            echo "Installation already exists (Baserow disabled). Skipping setup."
+            exit 0
+        fi
     fi
 
     # Ensure required directories exist

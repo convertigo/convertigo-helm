@@ -17,7 +17,7 @@ image:
 
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
-    version: "2.1.1"
+    version: "2.1.7"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -106,6 +106,9 @@ tolerations: []
 
 affinity: {}
 
+# ====== Convertigo JVM customization =========================================================================
+additionalJavaOpts: []
+
 # ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
 workspace:
   persistentVolume:
@@ -191,6 +194,13 @@ baserow:
 
 # ====== Couchdb ========== This is the No SQL database used by Convertigo =========================================
 couchdb:
+  enabled: true
+  urlOverride: ""
+  existingSecret: ""
+  existingSecretNamespace: ""
+  existingSecretUsernameKey: ""
+  existingSecretPasswordKey: ""
+  existingSecretOptional: false
   image:
     repository: couchdb
     tag: 3.4.2

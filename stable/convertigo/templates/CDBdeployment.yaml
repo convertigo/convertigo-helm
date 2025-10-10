@@ -1,3 +1,4 @@
+{{- if .Values.couchdb.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,9 +35,9 @@ spec:
               mountPath: /opt/couchdb/data
           env:
             - name: COUCHDB_USER
-              value: {{ .Values.couchdb.admin }}
+              value: {{ include "convertigo.couchdbUsername" . | quote }}
             - name: COUCHDB_PASSWORD
-              value: {{ .Values.couchdb.password }}
+              value: {{ include "convertigo.couchdbPassword" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -52,4 +53,6 @@ spec:
             httpGet:
               path: /_utils
               port: http
+
+{{- end }}
        

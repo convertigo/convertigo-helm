@@ -74,3 +74,90 @@ get run as group id
 {{ define "convertigo.runAsGroupId"}}
 {{- if .Values.podSecurityContext.fsGroup }}{{ .Values.podSecurityContext.fsGroup }}{{- else }}{{ template "convertigo.runAsUserId" . }}{{- end }}
 {{- end }}
+
+{{/*
+Resolve CouchDB credential value from an existing secret or fallback.
+*/}}
+{{- define "convertigo.couchdbSecretValue" -}}
+{{- $ctx := index . 0 -}}
+{{- $key := index . 1 -}}
+{{- $fallback := printf "%s" (index . 2) -}}
+{{- $value := $fallback -}}
+{{- $secretName := $ctx.Values.couchdb.existingSecret -}}
+{{- if and $secretName (ne $secretName "") }}
+  {{- if or (not $key) (eq $key "") }}
+    {{- if not $ctx.Values.couchdb.existingSecretOptional }}
+      {{- fail "couchdb.existingSecretUsernameKey/PasswordKey must be provided when couchdb.existingSecret is set" }}
+    {{- end }}
+  {{- else }}
+    {{- $namespace := default $ctx.Release.Namespace $ctx.Values.couchdb.existingSecretNamespace -}}
+    {{- $secret := lookup "v1" "Secret" $namespace $secretName -}}
+    {{- if $secret }}
+      {{- $data := index $secret.data $key -}}
+      {{- if $data }}
+        {{- $value = printf "%s" ($data | b64dec) -}}
+      {{- else }}
+        {{- if not $ctx.Values.couchdb.existingSecretOptional }}
+          {{- fail (printf "couchdb existing secret %q is missing key %q" $secretName $key) }}
+        {{- end }}
+      {{- end }}
+    {{- else }}
+      {{- if not $ctx.Values.couchdb.existingSecretOptional }}
+        {{- fail (printf "couchdb existing secret %q not found in namespace %q" $secretName $namespace) }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- $value | trimAll "\n\r" -}}
+{{- end }}
+
+{{/*
+Resolve CouchDB username for Convertigo.
+*/}}
+{{- define "convertigo.couchdbUsername" -}}
+{{- include "convertigo.couchdbSecretValue" (list . .Values.couchdb.existingSecretUsernameKey .Values.couchdb.admin) -}}
+{{- end }}
+
+{{/*
+Resolve CouchDB password for Convertigo.
+*/}}
+{{- define "convertigo.couchdbPassword" -}}
+{{- include "convertigo.couchdbSecretValue" (list . .Values.couchdb.existingSecretPasswordKey .Values.couchdb.password) -}}
+{{- end }}
+
+{{/*
+Resolve the CouchDB URL to be used by Convertigo.
+*/}}
+{{- define "convertigo.couchdbUrl" -}}
+{{- $default := printf "http://%s-cdb:5984" (include "convertigo.fullname" .) -}}
+{{- default $default .Values.couchdb.urlOverride -}}
+{{- end }}
+
+{{/*
+Compose JAVA_OPTS for the main Convertigo container.
+*/}}
+{{- define "convertigo.javaOpts" -}}
+{{- $ctx := . -}}
+{{- $timescaleJdbc := printf "jdbc:postgresql://%s-timescaledb/%s" (include "convertigo.fullname" $ctx) $ctx.Values.timescaledb.billing_database -}}
+{{- $couchUser := trim (include "convertigo.couchdbUsername" $ctx) -}}
+{{- $couchPass := trim (include "convertigo.couchdbPassword" $ctx) -}}
+{{- $opts := list
+    "-Dconvertigo.engine.log4j.appender.CemsAppender.File=/tmp/convertigo-logs/engine.log"
+    (printf "-Dconvertigo.engine.fullsync.couch.username=%s" $couchUser)
+    (printf "-Dconvertigo.engine.fullsync.couch.password=%s" $couchPass)
+    (printf "-Dconvertigo.engine.fullsync.couch.url=%s" (include "convertigo.couchdbUrl" $ctx))
+    "-Dconvertigo.engine.billing.enabled=true"
+    "-Dconvertigo.engine.billing.persistence.jdbc.driver=org.postgresql.Driver"
+    "-Dconvertigo.engine.billing.persistence.dialect=org.hibernate.dialect.PostgreSQLDialect"
+    (printf "-Dconvertigo.engine.billing.persistence.jdbc.username=%s" $ctx.Values.timescaledb.user)
+    (printf "-Dconvertigo.engine.billing.persistence.jdbc.password=%s" $ctx.Values.timescaledb.password)
+    (printf "-Dconvertigo.engine.billing.persistence.jdbc.url=%s" $timescaleJdbc)
+  -}}
+{{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}
+{{- range $extra := $extraOpts }}
+  {{- if $extra }}
+    {{- $opts = append $opts $extra }}
+  {{- end }}
+{{- end }}
+{{- join " " $opts -}}
+{{- end }}

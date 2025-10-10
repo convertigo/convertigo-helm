@@ -1,3 +1,4 @@
+{{- if .Values.baserow.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,3 +18,4 @@ spec:
       name: http-backend
   selector:
     {{- include "convertigo.selectorLabels" . | nindent 4 }}-br
+{{- end }}

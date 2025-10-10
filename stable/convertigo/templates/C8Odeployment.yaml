@@ -47,37 +47,26 @@ spec:
             - name: c8o-install-car-files
               mountPath: /home/convertigo/scripts
           env:
-          - name: JAVA_OPTS
-            value: '
-            -Dconvertigo.engine.log4j.appender.CemsAppender.File=/tmp/convertigo-logs/engine.log
-            -Dconvertigo.engine.fullsync.couch.username={{ .Values.couchdb.admin }}
-            -Dconvertigo.engine.fullsync.couch.password={{ .Values.couchdb.password }}
-            -Dconvertigo.engine.fullsync.couch.url=http://{{ include "convertigo.fullname" . }}-cdb:5984
-            -Dconvertigo.engine.billing.enabled=true
-            -Dconvertigo.engine.billing.persistence.jdbc.driver=org.postgresql.Driver
-            -Dconvertigo.engine.billing.persistence.dialect=org.hibernate.dialect.PostgreSQLDialect
-            -Dconvertigo.engine.billing.persistence.jdbc.username={{ .Values.timescaledb.user }}
-            -Dconvertigo.engine.billing.persistence.jdbc.password={{ .Values.timescaledb.password }}
-            -Dconvertigo.engine.billing.persistence.jdbc.url=jdbc:postgresql://{{ include "convertigo.fullname" . }}-timescaledb/{{ .Values.timescaledb.billing_database }}
-            '
-          - name: JXMX
-            value: '{{ .Values.image.jxmx }}'
-          - name: LOG_STDOUT
-            value: "true"
-          - name: LOG_FILE
-            value: "true"
-          - name: COOKIE_PATH
-            value: "/convertigo"
-          - name: COOKIE_SECURE
-            value: "{{ .Values.ssl_only }}"
-          - name: COOKIE_SAMESITE
-            value: lax
-          - name: SESSION_TIMEOUT
-            value: "30"
-          - name: DISABLE_SUDO
-            value: "false"
-          - name: BASEROW_PUBLIC_URL
-            value: '{{ .Values.baserow.baserow_public_url }}'
+            - name: JAVA_OPTS
+              value: {{ include "convertigo.javaOpts" . | quote }}
+            - name: JXMX
+              value: '{{ .Values.image.jxmx }}'
+            - name: LOG_STDOUT
+              value: "true"
+            - name: LOG_FILE
+              value: "true"
+            - name: COOKIE_PATH
+              value: "/convertigo"
+            - name: COOKIE_SECURE
+              value: "{{ .Values.ssl_only }}"
+            - name: COOKIE_SAMESITE
+              value: lax
+            - name: SESSION_TIMEOUT
+              value: "30"
+            - name: DISABLE_SUDO
+              value: "false"
+            - name: BASEROW_PUBLIC_URL
+              value: '{{ .Values.baserow.baserow_public_url }}'
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

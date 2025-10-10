@@ -66,7 +66,7 @@ spec:
             - name: DISABLE_SUDO
               value: "false"
             - name: BASEROW_PUBLIC_URL
-              value: '{{ .Values.baserow.baserow_public_url }}'
+              value: {{ (default (printf "https://%s" .Values.publicAddr) .Values.baserow.baserow_public_url) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

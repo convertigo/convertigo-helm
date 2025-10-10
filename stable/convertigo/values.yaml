@@ -178,6 +178,7 @@ baserow:
   baserow_db : baserow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
+  baserow_public_url: ""
   persistentVolume:
     # adapt the storage class to your environment
     storageClass: ebs-sc

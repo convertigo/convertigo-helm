@@ -88,7 +88,7 @@ data:
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
 
     curl -L https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz | \
-        tar xvz --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
+        tar xvz --no-same-owner --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
 
     if curl --connect-timeout 1 -s http://169.254.169.254/latest/meta-data/ >/dev/null; then
         echo "This is an AWS EC2 instance" 

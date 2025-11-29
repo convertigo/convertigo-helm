@@ -153,6 +153,31 @@ Compose JAVA_OPTS for the main Convertigo container.
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.password=%s" $ctx.Values.timescaledb.password)
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.url=%s" $timescaleJdbc)
   -}}
+{{- if $ctx.Values.sessionStore.enabled }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.store.mode=%s" $ctx.Values.sessionStore.mode) }}
+  {{- if eq $ctx.Values.sessionStore.mode "redis" }}
+    {{- $redisHost := $ctx.Values.sessionStore.redis.host }}
+    {{- if and (not $redisHost) $ctx.Values.redis.enabled }}
+      {{- $redisHost = printf "%s-redis" (include "convertigo.fullname" $ctx) }}
+    {{- end }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.sessionStore.redis.port) }}
+    {{- if $ctx.Values.sessionStore.redis.username }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.username=%s" $ctx.Values.sessionStore.redis.username) }}
+    {{- end }}
+    {{- if $ctx.Values.sessionStore.redis.password }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.sessionStore.redis.password) }}
+    {{- end }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.database=%v" $ctx.Values.sessionStore.redis.database) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl=%v" $ctx.Values.sessionStore.redis.ssl) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.timeout=%v" $ctx.Values.sessionStore.redis.timeout) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.prefix=%s" $ctx.Values.sessionStore.redis.prefix) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.default.ttl=%v" $ctx.Values.sessionStore.redis.defaultTtl) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.cookie.name=%s" $ctx.Values.sessionStore.cookieName) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.serialization.debug=%v" $ctx.Values.sessionStore.serializationDebug) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.serialization.report=%v" $ctx.Values.sessionStore.serializationReport) }}
+  {{- end }}
+{{- end }}
 {{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}
 {{- range $extra := $extraOpts }}
   {{- if $extra }}

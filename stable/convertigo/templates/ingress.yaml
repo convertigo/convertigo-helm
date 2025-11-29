@@ -1,9 +1,27 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "convertigo.fullname" . -}}
+{{- $annotations := merge (dict) .Values.ingress.annotations -}}
 {{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
-  {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
-  {{- $_ := set .Values.ingress.annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
+  {{- if not (hasKey $annotations "kubernetes.io/ingress.class") }}
+    {{- $_ := set $annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
   {{- end }}
+{{- end }}
+{{- if and .Values.sessionStore.enabled (eq .Values.sessionStore.mode "tomcat") }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/affinity" "cookie" }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/affinity-mode" "persistent" }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-name" "route" }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-hash" "sha1" }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-secure" "false" }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-path" "/convertigo" }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-httponly" "true" }}
+{{- else if and .Values.sessionStore.enabled (eq .Values.sessionStore.mode "redis") }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/affinity" }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/affinity-mode" }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/session-cookie-name" }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/session-cookie-hash" }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/session-cookie-secure" }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/session-cookie-path" }}
+  {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/session-cookie-httponly" }}
 {{- end }}
 {{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.GitVersion -}}
 apiVersion: networking.k8s.io/v1
@@ -17,7 +35,7 @@ metadata:
   name: {{ $fullName }}
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- with $annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}

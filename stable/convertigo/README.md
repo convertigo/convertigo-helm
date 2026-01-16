@@ -33,7 +33,19 @@ Find below the values.yaml customization options :
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
-| nocodestudio.version              | 2.1.1                  | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
+| sessionStore.enabled              | false                  | Enable session store configuration. Use `mode=redis` for stateless sessions. |
+| sessionStore.mode                 | tomcat                 | Session store mode: `tomcat` (sticky sessions) or `redis` (stateless). |
+| sessionStore.redis.host           |                        | Redis host for session store. Leave empty to use the embedded Redis service when `redis.enabled=true`. |
+| sessionStore.redis.password       |                        | Redis password for session store. Defaults to `redis.auth.password` when empty. |
+| sessionStore.redis.existingSecret |                        | Existing secret containing the Redis password (shared with the embedded Redis). |
+| sessionStore.redis.existingSecretNamespace |               | Namespace for the existing Redis secret (defaults to release namespace). |
+| sessionStore.redis.existingSecretPasswordKey |             | Key inside the existing Redis secret that contains the password. |
+| sessionStore.redis.existingSecretOptional | false         | Allow missing/invalid existing secret and fall back to inline values. |
+| redis.enabled                     | false                  | Deploy the embedded Redis service (used only when `sessionStore.mode=redis`). |
+| redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
+| redis.auth.password               | ChangeMe!              | Redis AUTH password (also used by Convertigo when sessionStore password is empty). |
+| redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume. |
+| nocodestudio.version              | 2.1.11                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
@@ -105,6 +117,7 @@ Notes on probes:
 ## Needed annotations for nginx
 
 As Convertigo workers require "sticky" sessions we need some specific nginx annotations. Some other needed configuration is also defined here. If you use another ingress controller be sure to configure the equivalent settings.
+When `sessionStore.mode=redis`, sticky-session annotations are not needed and the chart removes them automatically.
 
 ```code
   annotations: 

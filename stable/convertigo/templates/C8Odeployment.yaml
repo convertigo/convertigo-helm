@@ -65,30 +65,6 @@ spec:
               value: "30"
             - name: DISABLE_SUDO
               value: "false"
-            {{- if .Values.sessionStore.enabled }}
-            {{- $redisHost := .Values.sessionStore.redis.host }}
-            {{- if and (eq .Values.sessionStore.mode "redis") (not $redisHost) .Values.redis.enabled }}
-            {{- $redisHost = printf "%s-redis" (include "convertigo.fullname" .) }}
-            {{- end }}
-            {{- $sessionMode := coalesce .Values.sessionStore.env.modeValue .Values.sessionStore.mode }}
-            - name: {{ .Values.sessionStore.env.modeVar }}
-              value: {{ $sessionMode | quote }}
-            {{- if eq .Values.sessionStore.mode "redis" }}
-            - name: {{ .Values.sessionStore.env.hostVar }}
-              value: {{ $redisHost | quote }}
-            - name: {{ .Values.sessionStore.env.portVar }}
-              value: {{ .Values.sessionStore.redis.port | quote }}
-            {{- if .Values.sessionStore.redis.password }}
-            - name: {{ .Values.sessionStore.env.passwordVar }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "convertigo.fullname" . }}-redis
-                  key: password
-            {{- end }}
-            - name: {{ .Values.sessionStore.env.databaseVar }}
-              value: {{ .Values.sessionStore.redis.database | quote }}
-            {{- end }}
-            {{- end }}
             - name: BASEROW_PUBLIC_URL
               value: {{ (default (printf "https://%s" .Values.publicAddr) .Values.baserow.baserow_public_url) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}

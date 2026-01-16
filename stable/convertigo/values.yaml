@@ -17,7 +17,7 @@ image:
 
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
-    version: "2.1.10"
+    version: "2.1.11"
 
 imagePullSecrets: []
 nameOverride: ""

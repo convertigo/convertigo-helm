@@ -18,7 +18,7 @@ data:
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
     if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
         echo "No Symbols found, generating Symbols"
-        mkdir configuration
+        mkdir -p "$CONFIG_DIR"
         cat > "$GLOBAL_SYMBOLS" << EOF
     C8Oforms.baserow.iframe=https://{{ .Values.publicAddr }}/convertigo/projects/BaserowIntegration/c8o/
     lib_baserow.https=false

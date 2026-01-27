@@ -1,0 +1,40 @@
+replicaCount: 2
+
+publicAddr: my-public-domain.com # replace with your real public hostname
+ingress:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 500m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  rootRedirectEnabled: false
+
+serviceAccount:
+  create: true
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "devredis"
+
+workspace:
+  persistentVolume:
+    storageClass: nfs-rwx
+    size: 4Gi
+  accessModes:
+    - ReadWriteMany
+
+timescaledb:
+  persistentVolume:
+    storageClass: bsu-gp2
+
+baserow:
+  persistentVolume:
+    storageClass: bsu-gp2
+
+couchdb:
+  persistentVolume:
+    storageClass: bsu-gp2

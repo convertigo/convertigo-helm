@@ -134,60 +134,16 @@ Resolve the CouchDB URL to be used by Convertigo.
 {{- end }}
 
 {{/*
-Resolve Redis password for session store from an existing secret or fallback.
+Resolve session store mode.
+auto -> redis when redis.enabled=true, otherwise tomcat.
 */}}
-{{- define "convertigo.sessionRedisPassword" -}}
-{{- $ctx := . -}}
-{{- $value := "" -}}
-{{- $secretName := $ctx.Values.sessionStore.redis.existingSecret -}}
-{{- if and $secretName (ne $secretName "") }}
-  {{- $key := $ctx.Values.sessionStore.redis.existingSecretPasswordKey -}}
-  {{- if or (not $key) (eq $key "") }}
-    {{- if not $ctx.Values.sessionStore.redis.existingSecretOptional }}
-      {{- fail "sessionStore.redis.existingSecretPasswordKey must be provided when sessionStore.redis.existingSecret is set" }}
-    {{- end }}
-  {{- else }}
-    {{- $namespace := default $ctx.Release.Namespace $ctx.Values.sessionStore.redis.existingSecretNamespace -}}
-    {{- $secret := lookup "v1" "Secret" $namespace $secretName -}}
-    {{- if $secret }}
-      {{- $data := index $secret.data $key -}}
-      {{- if $data }}
-        {{- $value = printf "%s" ($data | b64dec) -}}
-      {{- else }}
-        {{- if not $ctx.Values.sessionStore.redis.existingSecretOptional }}
-          {{- fail (printf "sessionStore.redis existing secret %q is missing key %q" $secretName $key) }}
-        {{- end }}
-      {{- end }}
-    {{- else }}
-      {{- if not $ctx.Values.sessionStore.redis.existingSecretOptional }}
-        {{- fail (printf "sessionStore.redis existing secret %q not found in namespace %q" $secretName $namespace) }}
-      {{- end }}
-    {{- end }}
-  {{- end }}
-{{- end }}
-{{- if or (not $value) (eq $value "") }}
-  {{- if $ctx.Values.sessionStore.redis.password }}
-    {{- $value = printf "%s" $ctx.Values.sessionStore.redis.password -}}
-  {{- else if and $ctx.Values.redis.auth.enabled $ctx.Values.redis.auth.password }}
-    {{- $value = printf "%s" $ctx.Values.redis.auth.password -}}
-  {{- end }}
-{{- end }}
-{{- $value | trimAll "\n\r" -}}
-{{- end }}
-
-{{/*
-Resolve Redis host for session store.
-*/}}
-{{- define "convertigo.sessionRedisHost" -}}
-{{- $ctx := . -}}
-{{- $host := $ctx.Values.sessionStore.redis.host -}}
-{{- if and (or (not $host) (eq $host "")) $ctx.Values.redis.enabled }}
-  {{- $host = printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
-{{- end }}
-{{- if or (not $host) (eq $host "") }}
-  {{- fail "sessionStore.redis.host must be set when sessionStore.mode=redis and redis.enabled=false" }}
-{{- end }}
-{{- $host -}}
+{{- define "convertigo.sessionStoreMode" -}}
+{{- $mode := default "auto" .Values.sessionStore.mode -}}
+{{- if eq $mode "auto" -}}
+  {{- if .Values.redis.enabled -}}redis{{- else -}}tomcat{{- end -}}
+{{- else -}}
+  {{- $mode -}}
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -210,25 +166,14 @@ Compose JAVA_OPTS for the main Convertigo container.
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.password=%s" $ctx.Values.timescaledb.password)
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.url=%s" $timescaleJdbc)
   -}}
-{{- if $ctx.Values.sessionStore.enabled }}
-  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.store.mode=%s" $ctx.Values.sessionStore.mode) }}
-  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.cookie.name=%s" $ctx.Values.sessionStore.cookieName) }}
-  {{- if eq $ctx.Values.sessionStore.mode "redis" }}
-    {{- $redisHost := include "convertigo.sessionRedisHost" $ctx }}
-    {{- $redisPassword := include "convertigo.sessionRedisPassword" $ctx }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.sessionStore.redis.port) }}
-    {{- if $ctx.Values.sessionStore.redis.username }}
-      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.username=%s" $ctx.Values.sessionStore.redis.username) }}
-    {{- end }}
-    {{- if $redisPassword }}
-      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $redisPassword) }}
-    {{- end }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.database=%v" $ctx.Values.sessionStore.redis.database) }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl=%v" $ctx.Values.sessionStore.redis.ssl) }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.timeout=%v" $ctx.Values.sessionStore.redis.timeout) }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.prefix=%s" $ctx.Values.sessionStore.redis.prefix) }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.default.ttl=%v" $ctx.Values.sessionStore.redis.defaultTtl) }}
+{{- $sessionMode := include "convertigo.sessionStoreMode" $ctx -}}
+{{- if and (eq $sessionMode "redis") $ctx.Values.redis.enabled }}
+  {{- $redisHost := printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
+  {{- $opts = append $opts "-Dconvertigo.engine.session.store.mode=redis" }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.redis.service.port) }}
+  {{- if and $ctx.Values.redis.auth.enabled $ctx.Values.redis.auth.password }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.redis.auth.password) }}
   {{- end }}
 {{- end }}
 {{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}

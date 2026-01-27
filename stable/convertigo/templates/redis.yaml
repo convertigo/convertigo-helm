@@ -1,5 +1,6 @@
-{{- $redisPassword := include "convertigo.sessionRedisPassword" . -}}
-{{- if and .Values.sessionStore.enabled (eq .Values.sessionStore.mode "redis") .Values.redis.enabled }}
+{{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
+{{- $redisPassword := .Values.redis.auth.password -}}
+{{- if and (eq $sessionMode "redis") .Values.redis.enabled }}
 apiVersion: v1
 kind: Service
 metadata:

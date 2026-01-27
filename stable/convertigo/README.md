@@ -33,17 +33,10 @@ Find below the values.yaml customization options :
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
-| sessionStore.enabled              | false                  | Enable session store configuration. Use `mode=redis` for stateless sessions. |
-| sessionStore.mode                 | tomcat                 | Session store mode: `tomcat` (sticky sessions) or `redis` (stateless). |
-| sessionStore.redis.host           |                        | Redis host for session store. Leave empty to use the embedded Redis service when `redis.enabled=true`. |
-| sessionStore.redis.password       |                        | Redis password for session store. Defaults to `redis.auth.password` when empty. |
-| sessionStore.redis.existingSecret |                        | Existing secret containing the Redis password (shared with the embedded Redis). |
-| sessionStore.redis.existingSecretNamespace |               | Namespace for the existing Redis secret (defaults to release namespace). |
-| sessionStore.redis.existingSecretPasswordKey |             | Key inside the existing Redis secret that contains the password. |
-| sessionStore.redis.existingSecretOptional | false         | Allow missing/invalid existing secret and fall back to inline values. |
-| redis.enabled                     | false                  | Deploy the embedded Redis service (used only when `sessionStore.mode=redis`). |
+| sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
+| redis.enabled                     | false                  | Deploy the embedded Redis service used for stateless sessions. When false, the chart does not configure Redis in Convertigo. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
-| redis.auth.password               | ChangeMe!              | Redis AUTH password (also used by Convertigo when sessionStore password is empty). |
+| redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
 | redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume. |
 | nocodestudio.version              | 2.1.11                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
@@ -108,6 +101,11 @@ helm upgrade --install convertigo ./stable/convertigo \
 
 If the secret might be missing, add `--set couchdb.existingSecretOptional=true` to fall back to inline credentials.
 
+## External Redis for session store
+
+If you want to use an external Redis, set `sessionStore.mode=redis` and `redis.enabled=false`.  
+In that case the chart does **not** inject Redis-related JAVA_OPTS; configure them yourself via `additionalJavaOpts` or in `/workspace/configuration/engine.properties`.
+
 Notes on probes:
 - Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
   Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
@@ -117,7 +115,7 @@ Notes on probes:
 ## Needed annotations for nginx
 
 As Convertigo workers require "sticky" sessions we need some specific nginx annotations. Some other needed configuration is also defined here. If you use another ingress controller be sure to configure the equivalent settings.
-When `sessionStore.mode=redis`, sticky-session annotations are not needed and the chart removes them automatically.
+When the session mode resolves to `redis` (explicitly or via `auto`), sticky-session annotations are not needed and the chart removes them automatically.
 
 ```code
   annotations: 

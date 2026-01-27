@@ -1,12 +1,13 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "convertigo.fullname" . -}}
 {{- $annotations := merge (dict) .Values.ingress.annotations -}}
+{{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
 {{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
   {{- if not (hasKey $annotations "kubernetes.io/ingress.class") }}
     {{- $_ := set $annotations "kubernetes.io/ingress.class" .Values.ingress.className}}
   {{- end }}
 {{- end }}
-{{- if and .Values.sessionStore.enabled (eq .Values.sessionStore.mode "tomcat") }}
+{{- if eq $sessionMode "tomcat" }}
   {{- $_ := set $annotations "nginx.ingress.kubernetes.io/affinity" "cookie" }}
   {{- $_ := set $annotations "nginx.ingress.kubernetes.io/affinity-mode" "persistent" }}
   {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-name" "route" }}
@@ -14,7 +15,7 @@
   {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-secure" "false" }}
   {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-path" "/convertigo" }}
   {{- $_ := set $annotations "nginx.ingress.kubernetes.io/session-cookie-httponly" "true" }}
-{{- else if and .Values.sessionStore.enabled (eq .Values.sessionStore.mode "redis") }}
+{{- else if eq $sessionMode "redis" }}
   {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/affinity" }}
   {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/affinity-mode" }}
   {{- $_ := unset $annotations "nginx.ingress.kubernetes.io/session-cookie-name" }}

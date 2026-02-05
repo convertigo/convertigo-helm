@@ -13,6 +13,7 @@ data:
     CONFIG_DIR="$WORKSPACE/configuration"
     BASEROW_DIR="$PROJECTS_DIR/BaserowIntegration"
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
+    NOCODESTUDIO_ENABLED="{{ if .Values.nocodestudio.enable }}true{{ else }}false{{ end }}"
 
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
@@ -87,8 +88,12 @@ data:
     echo "Installing Convertigo projects from GitHub, be sure you have access to the internet"
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
 
-    curl -L https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz | \
-        tar xvz --no-same-owner --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
+    if [[ "$NOCODESTUDIO_ENABLED" == "true" ]]; then
+        curl -L https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz | \
+            tar xvz --no-same-owner --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
+    else
+        echo "No Code Studio disabled (nocodestudio.enable=false). Skipping C8oForms installation."
+    fi
 
     if curl --connect-timeout 1 -s http://169.254.169.254/latest/meta-data/ >/dev/null; then
         echo "This is an AWS EC2 instance" 

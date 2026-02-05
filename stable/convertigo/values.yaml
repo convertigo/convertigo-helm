@@ -17,6 +17,7 @@ image:
 
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
+    enable: true
     version: "2.1.11"
 
 imagePullSecrets: []

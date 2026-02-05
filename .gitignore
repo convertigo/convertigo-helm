@@ -3,3 +3,4 @@ stable/convertigo/index.yaml
 /.DS_Store
 /.project
 myvalues.yaml
+.tmp/

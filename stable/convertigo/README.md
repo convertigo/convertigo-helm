@@ -39,7 +39,7 @@ Find below the values.yaml customization options :
 | redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
 | redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
-| nocodestudio.version              | 2.1.11                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
+| nocodestudio.version              | 2.1.14                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |

@@ -134,6 +134,27 @@ Resolve the CouchDB URL to be used by Convertigo.
 {{- end }}
 
 {{/*
+Resolve the external public origin used by browser clients.
+*/}}
+{{- define "convertigo.publicUrl" -}}
+{{- default (printf "https://%s" .Values.publicAddr) .Values.publicUrl | trimSuffix "/" -}}
+{{- end }}
+
+{{/*
+Resolve Convertigo public CORS origins passed to the Docker entrypoint.
+*/}}
+{{- define "convertigo.publicDomains" -}}
+{{- default (include "convertigo.publicUrl" .) .Values.publicDomains -}}
+{{- end }}
+
+{{/*
+Resolve the external Baserow URL.
+*/}}
+{{- define "convertigo.baserowPublicUrl" -}}
+{{- default (include "convertigo.publicUrl" .) .Values.baserow.baserow_public_url -}}
+{{- end }}
+
+{{/*
 Resolve session store mode.
 auto -> redis when redis.enabled=true, otherwise tomcat.
 */}}

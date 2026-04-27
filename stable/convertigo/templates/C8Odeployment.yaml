@@ -65,8 +65,10 @@ spec:
               value: "30"
             - name: DISABLE_SUDO
               value: "false"
+            - name: PUBLIC_DOMAINS
+              value: {{ include "convertigo.publicDomains" . | quote }}
             - name: BASEROW_PUBLIC_URL
-              value: {{ (default (printf "https://%s" .Values.publicAddr) .Values.baserow.baserow_public_url) | quote }}
+              value: {{ include "convertigo.baserowPublicUrl" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

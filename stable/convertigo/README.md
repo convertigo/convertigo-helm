@@ -41,7 +41,9 @@ Find below the values.yaml customization options :
 | redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
 | nocodestudio.version              | 2.1.14                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
-| publicAddr                        | localhost              | This must match the exact public address users will use in their browsers, corresponding to your ingress DNS name. Default is `https://my-public-addr/convertigo`. |
+| publicAddr                        | localhost              | Public hostname used by the ingress rules. |
+| publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
+| publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
 | ingress.annotations               |                        | Nginx ingress annotations for handling sticky sessions. Convertigo workers need sticky sessions based on route cookies. Default `values.yaml` provides the correct setup. |
@@ -82,7 +84,7 @@ Find below the values.yaml customization options :
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
 | baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
-| baserow.baserow_public_url        |                        | External URL exposed to Baserow clients (include protocol and optional port). |
+| baserow.baserow_public_url        |                        | Optional Baserow-specific external URL. Defaults to `publicUrl`. |
 | baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |

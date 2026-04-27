@@ -28,6 +28,14 @@ fullnameOverride: ""
 #This is used to generate the Ingress configuration
 publicAddr: localhost
 
+#Full public origin users will use to access Convertigo and Baserow.
+#Defaults to https://publicAddr.
+publicUrl: ""
+
+#Explicit public CORS origins injected into Convertigo PUBLIC_DOMAINS.
+#Defaults to publicUrl. Use # as separator for multiple origins.
+publicDomains: ""
+
 #If true, the Convertigo server will only be accessible through HTTPS
 ssl_only: "false"
 

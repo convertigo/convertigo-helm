@@ -21,7 +21,7 @@ data:
         echo "No Symbols found, generating Symbols"
         mkdir -p "$CONFIG_DIR"
         cat > "$GLOBAL_SYMBOLS" << EOF
-    C8Oforms.baserow.iframe=https://{{ .Values.publicAddr }}/convertigo/projects/BaserowIntegration/c8o/
+    C8Oforms.baserow.iframe={{ include "convertigo.publicUrl" . }}/convertigo/projects/BaserowIntegration/c8o/
     lib_baserow.https=false
     lib_baserow.port=8000
     lib_baserow.server={{ include "convertigo.fullname" . }}-br

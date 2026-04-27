@@ -155,7 +155,8 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- $couchUser := trim (include "convertigo.couchdbUsername" $ctx) -}}
 {{- $couchPass := trim (include "convertigo.couchdbPassword" $ctx) -}}
 {{- $opts := list
-    "-Dconvertigo.engine.log4j.appender.CemsAppender.File=/tmp/convertigo-logs/engine.log"
+    "-Dlog.directory=/tmp/convertigo-logs"
+    "-Dconvertigo.engine.cache_manager.filecache.directory=/tmp/convertigo-cache"
     (printf "-Dconvertigo.engine.fullsync.couch.username=%s" $couchUser)
     (printf "-Dconvertigo.engine.fullsync.couch.password=%s" $couchPass)
     (printf "-Dconvertigo.engine.fullsync.couch.url=%s" (include "convertigo.couchdbUrl" $ctx))
@@ -175,6 +176,9 @@ Compose JAVA_OPTS for the main Convertigo container.
   {{- if and $ctx.Values.redis.auth.enabled $ctx.Values.redis.auth.password }}
     {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.redis.auth.password) }}
   {{- end }}
+{{- end }}
+{{- if $ctx.Values.sharedWorkspaceSync.enabled }}
+  {{- $opts = append $opts "-Dconvertigo.engine.session.shared_workspace.sync.enabled=true" }}
 {{- end }}
 {{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}
 {{- range $extra := $extraOpts }}

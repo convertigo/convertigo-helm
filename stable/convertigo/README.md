@@ -34,6 +34,7 @@ Find below the values.yaml customization options :
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
 | sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
+| sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
 | redis.enabled                     | false                  | Deploy the embedded Redis service used for stateless sessions. When false, the chart does not configure Redis in Convertigo. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
 | redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
@@ -106,6 +107,17 @@ If the secret might be missing, add `--set couchdb.existingSecretOptional=true` 
 
 If you want to use an external Redis, set `sessionStore.mode=redis` and `redis.enabled=false`.  
 In that case the chart does **not** inject Redis-related JAVA_OPTS; configure them yourself via `additionalJavaOpts` or in `/workspace/configuration/engine.properties`.
+
+## Logs, cache, and shared workspace
+
+When multiple Convertigo replicas share the same workspace PVC, only projects, configuration, and runtime sync markers should live on that shared volume.
+
+The chart keeps logs and file cache on pod-local storage by injecting:
+
+- `-Dlog.directory=/tmp/convertigo-logs`
+- `-Dconvertigo.engine.cache_manager.filecache.directory=/tmp/convertigo-cache`
+
+This avoids log/cache collisions between replicas and avoids accumulating stale per-instance log or cache directories on the shared workspace volume.
 
 Notes on probes:
 - Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
@@ -187,6 +199,15 @@ Then configure Convertigo's workspace volume claim this way
 ```
 workspace.persistentVolume.storageClass: efs-sc
 ```
+
+And enable shared-workspace runtime synchronization:
+
+```
+sharedWorkspaceSync:
+  enabled: true
+```
+
+This setting is independent from `sessionStore.mode` and should be enabled for shared-workspace multi-replica deployments whether sessions are sticky Tomcat or Redis-backed.
 
 ## Install AWS Nginx ingress controller with internet facing Load Balancer
 

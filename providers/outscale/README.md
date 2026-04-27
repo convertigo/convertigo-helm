@@ -91,41 +91,11 @@ helm repo update
 
 helm upgrade --install convertigo convertigo/convertigo \
   -n convertigo \
-  --create-namespace
+  --create-namespace \
+  -f values.yaml
 ```
 
-## 4) Patch the init script for a shared workspace
-
-The default `installCarFiles.sh` must create the config directory under `/workspace`.
-Patch the ConfigMap so it uses `$CONFIG_DIR` instead of a relative `configuration` dir:
-
-```bash
-kubectl -n convertigo get configmap c8o-install-car-files -o json > /tmp/c8o-install-car-files.json
-
-python3 - <<'PY'
-import json
-p='/tmp/c8o-install-car-files.json'
-with open(p) as f:
-    data=json.load(f)
-script=data['data'].get('installCarFiles.sh','')
-script=script.replace('mkdir configuration', 'mkdir -p "$CONFIG_DIR"')
-data['data']['installCarFiles.sh']=script
-for rm in ["uid","resourceVersion","generation","creationTimestamp","managedFields"]:
-    data.get('metadata',{}).pop(rm, None)
-with open(p,'w') as f:
-    json.dump(data,f)
-PY
-
-kubectl apply -f /tmp/c8o-install-car-files.json
-```
-
-Restart Convertigo to pick up the change:
-
-```bash
-kubectl -n convertigo rollout restart deployment/convertigo-convertigo
-```
-
-## 5) Verify
+## 4) Verify
 
 ```bash
 kubectl -n convertigo get deployments

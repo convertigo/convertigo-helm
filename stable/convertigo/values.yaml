@@ -118,6 +118,11 @@ sessionStore:
   # tomcat: sticky sessions. redis: stateless sessions.
   mode: auto
 
+# ====== Shared workspace runtime sync ======================================================================
+sharedWorkspaceSync:
+  # Enable runtime synchronization between instances sharing the same Convertigo workspace.
+  enabled: false
+
 # ====== Redis (optional, for stateless session store) ======================================================
 redis:
   # Used only when sessionStore.mode resolves to "redis".

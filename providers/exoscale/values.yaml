@@ -30,6 +30,9 @@ workspace:
   accessModes:
     - ReadWriteMany
 
+sharedWorkspaceSync:
+  enabled: true
+
 timescaledb:
   persistentVolume:
     # Exoscale SKS block storage class (adapt to your cluster).

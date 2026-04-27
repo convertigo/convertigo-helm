@@ -27,6 +27,9 @@ workspace:
   accessModes:
     - ReadWriteMany
 
+sharedWorkspaceSync:
+  enabled: true
+
 timescaledb:
   persistentVolume:
     storageClass: bsu-gp2

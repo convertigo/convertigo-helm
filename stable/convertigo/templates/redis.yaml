@@ -1,5 +1,7 @@
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
 {{- $redisPassword := .Values.redis.auth.password -}}
+{{- $redisTls := default dict .Values.redis.tls -}}
+{{- $redisTlsMountPath := include "convertigo.redisTlsMountPath" . -}}
 {{- if and (eq $sessionMode "redis") .Values.redis.enabled }}
 apiVersion: v1
 kind: Service
@@ -59,6 +61,20 @@ spec:
             - "1"
             - "--appendonly"
             - "no"
+          {{- if $redisTls.enabled }}
+            - "--port"
+            - "0"
+            - "--tls-port"
+            - "{{ .Values.redis.service.port }}"
+            - "--tls-cert-file"
+            - "{{ $redisTlsMountPath }}/{{ default "redis.crt" $redisTls.certKey }}"
+            - "--tls-key-file"
+            - "{{ $redisTlsMountPath }}/{{ default "redis.key" $redisTls.keyKey }}"
+            - "--tls-ca-cert-file"
+            - "{{ $redisTlsMountPath }}/{{ default "ca.crt" $redisTls.caCertKey }}"
+            - "--tls-auth-clients"
+            - {{ ternary "yes" "no" $redisTls.authClients | quote }}
+          {{- end }}
           {{- if and .Values.redis.auth.enabled $redisPassword }}
             - "--requirepass"
             - "{{ $redisPassword }}"
@@ -71,6 +87,11 @@ spec:
           volumeMounts:
             - name: redis-data
               mountPath: /data
+          {{- if $redisTls.enabled }}
+            - name: redis-tls
+              mountPath: {{ $redisTlsMountPath }}
+              readOnly: true
+          {{- end }}
       volumes:
         - name: redis-data
           {{- if .Values.redis.persistence.enabled }}
@@ -79,6 +100,11 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- if $redisTls.enabled }}
+        - name: redis-tls
+          secret:
+            secretName: {{ include "convertigo.redisTlsSecretName" . }}
+        {{- end }}
 
 {{- if .Values.redis.persistence.enabled }}
 ---

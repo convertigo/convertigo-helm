@@ -62,6 +62,10 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
+service:
+  type: ClusterIP
+  nodePort:
+
 #Configure your Ingress here. This default configuration is for NGINX Ingress. Be sure your ingress suports Sticky sessions
 ingress:
   enabled: true
@@ -119,12 +123,34 @@ affinity: {}
 
 # ====== Convertigo JVM customization =========================================================================
 additionalJavaOpts: []
+extraVolumes: []
+extraVolumeMounts: []
 
 # ====== Session store (sticky or stateless) ================================================================
 sessionStore:
   # auto: use redis if redis.enabled=true, otherwise tomcat.
   # tomcat: sticky sessions. redis: stateless sessions.
   mode: auto
+  redis:
+    # Optional client settings, mainly for external Redis when redis.enabled=false.
+    # Embedded Redis still uses the redis.* server settings below.
+    host: ""
+    port: ""
+    username: ""
+    password: ""
+    database: ""
+    ssl:
+      enabled: false
+      truststore: ""
+      truststorePassword: ""
+      keystore: ""
+      keystorePassword: ""
+      # Optional keystore type, for example PKCS12, JKS, or PEM.
+      keystoreType: ""
+      # Optional verification mode: STRICT, CA_ONLY, or NONE. Empty uses the Redisson default.
+      verificationMode: ""
+      # Optional TLS protocol versions, for example: TLSv1.3,TLSv1.2.
+      protocols: ""
 
 # ====== Shared workspace runtime sync ======================================================================
 sharedWorkspaceSync:
@@ -144,6 +170,28 @@ redis:
   auth:
     enabled: true
     password: ChangeMe!
+  tls:
+    # Disabled by default. When enabled, Redis listens on TLS only.
+    enabled: false
+    # Set to true for mTLS (Redis requires a client certificate).
+    authClients: true
+    # Existing secret mounted in both Redis and Convertigo pods.
+    # Expected default keys: ca.crt, redis.crt, redis.key, truststore.p12, client.p12.
+    existingSecret: ""
+    mountPath: /etc/convertigo/redis-tls
+    caCertKey: ca.crt
+    certKey: redis.crt
+    keyKey: redis.key
+    clientTruststoreKey: truststore.p12
+    clientKeystoreKey: client.p12
+    truststorePassword: ""
+    keystorePassword: ""
+    # Optional keystore type, for example PKCS12, JKS, or PEM.
+    keystoreType: PKCS12
+    # Optional verification mode: STRICT, CA_ONLY, or NONE. Empty uses the Redisson default.
+    verificationMode: ""
+    # Optional TLS protocol versions, for example: TLSv1.3,TLSv1.2.
+    protocols: ""
   persistence:
     enabled: false
     # adapt the storage class to your environment

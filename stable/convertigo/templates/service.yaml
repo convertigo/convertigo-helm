@@ -5,11 +5,15 @@ metadata:
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
+  {{- $service := default dict .Values.service }}
+  type: {{ $service.type | default "ClusterIP" }}
   ports:
     - port: 28080
       targetPort: http
       protocol: TCP
       name: http
+      {{- if and (eq ($service.type | default "ClusterIP") "NodePort") $service.nodePort }}
+      nodePort: {{ $service.nodePort }}
+      {{- end }}
   selector:
     {{- include "convertigo.selectorLabels" . | nindent 4 }}

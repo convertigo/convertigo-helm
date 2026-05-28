@@ -33,11 +33,18 @@ Find below the values.yaml customization options :
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
+| extraVolumes                      | []                     | Extra volumes mounted on the Convertigo pod, for example Redis TLS secrets. |
+| extraVolumeMounts                 | []                     | Extra volume mounts for the Convertigo container. |
 | sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
+| sessionStore.redis.*              |                        | Optional Redis client settings used when `sessionStore.mode=redis` and `redis.enabled=false`. |
+| sessionStore.redis.ssl.*          |                        | Optional Redis TLS/mTLS client settings: truststore, keystore, verification mode, and protocols. |
 | sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
 | redis.enabled                     | false                  | Deploy the embedded Redis service used for stateless sessions. When false, the chart does not configure Redis in Convertigo. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
 | redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
+| redis.tls.enabled                 | false                  | Enable TLS on the embedded Redis and configure Convertigo to connect with `rediss`. |
+| redis.tls.authClients             | true                   | Require client certificates on the embedded Redis when TLS is enabled. Set false for server-side TLS only. |
+| redis.tls.existingSecret          |                        | Secret mounted in both Redis and Convertigo pods for Redis TLS/mTLS certificates and Java stores. |
 | redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
 | nocodestudio.version              | 2.1.14                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
@@ -107,8 +114,80 @@ If the secret might be missing, add `--set couchdb.existingSecretOptional=true` 
 
 ## External Redis for session store
 
-If you want to use an external Redis, set `sessionStore.mode=redis` and `redis.enabled=false`.  
-In that case the chart does **not** inject Redis-related JAVA_OPTS; configure them yourself via `additionalJavaOpts` or in `/workspace/configuration/engine.properties`.
+If you want to use an external Redis, set `sessionStore.mode=redis`, `redis.enabled=false`, and configure `sessionStore.redis.*`.
+
+For Redis TLS/mTLS, mount the client truststore/keystore with `extraVolumes` and `extraVolumeMounts`, then point `sessionStore.redis.ssl.*` to the mounted files. Example:
+
+```yaml
+sessionStore:
+  mode: redis
+  redis:
+    host: redis-mtls.default.svc.cluster.local
+    port: 6379
+    password: ChangeMe!
+    ssl:
+      enabled: true
+      truststore: /etc/convertigo/redis/truststore.p12
+      truststorePassword: changeit
+      keystore: /etc/convertigo/redis/client.p12
+      keystorePassword: changeit
+      keystoreType: PKCS12
+      verificationMode: CA_ONLY
+extraVolumes:
+  - name: redis-client-tls
+    secret:
+      secretName: redis-client-tls
+extraVolumeMounts:
+  - name: redis-client-tls
+    mountPath: /etc/convertigo/redis
+    readOnly: true
+```
+
+## Embedded Redis TLS/mTLS
+
+The embedded Redis remains plaintext by default. To enable TLS/mTLS for the embedded Redis, keep `redis.enabled=true` and set `redis.tls.enabled=true`.
+
+The chart expects `redis.tls.existingSecret` to contain the Redis PEM files and the Convertigo Java stores. Default key names are:
+
+- `ca.crt`
+- `redis.crt`
+- `redis.key`
+- `truststore.p12`
+- `client.p12`
+
+For `verificationMode=STRICT`, the Redis server certificate must contain the rendered Redis service name in its Subject Alternative Name. The service name is stable across pod restarts and is rendered as `<fullname>-redis`, for example:
+
+- `c8o-baseline-convertigo-redis`
+- `c8o-baseline-convertigo-redis.c8o-redis-baseline`
+- `c8o-baseline-convertigo-redis.c8o-redis-baseline.svc`
+- `c8o-baseline-convertigo-redis.c8o-redis-baseline.svc.cluster.local`
+
+Example:
+
+```yaml
+redis:
+  enabled: true
+  auth:
+    password: ChangeMe!
+  tls:
+    enabled: true
+    authClients: true
+    existingSecret: redis-mtls-certs
+    truststorePassword: changeit
+    keystorePassword: changeit
+    keystoreType: PKCS12
+    verificationMode: CA_ONLY
+```
+
+When this mode is enabled, Redis listens only on `--tls-port`, and Convertigo automatically receives the matching `session.redis.ssl.*` JVM properties.
+
+Redis TLS client options:
+
+- `truststore` identifies the Redis server certificate. It should contain the Redis server certificate, its signing CA, or both.
+- `keystore` identifies Convertigo to Redis when Redis requires client certificates.
+- Redisson supports JKS, PKCS#12, and PEM stores.
+- `verificationMode` defaults to Redisson `STRICT`: validate the certificate chain and hostname. `CA_ONLY` validates the certificate chain but ignores hostname verification. `NONE` disables certificate verification.
+- `protocols` is optional. Leave it empty for JVM/Redisson defaults, or set protocol versions such as `TLSv1.3,TLSv1.2`.
 
 ## Logs, cache, and shared workspace
 

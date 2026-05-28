@@ -1,3 +1,6 @@
+{{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
+{{- $redisTls := default dict .Values.redis.tls -}}
+{{- $embeddedRedisTls := and (eq $sessionMode "redis") .Values.redis.enabled $redisTls.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,6 +38,14 @@ spec:
           configMap:
               name: c8o-install-car-files
               defaultMode: 0777
+        {{- if $embeddedRedisTls }}
+        - name: redis-tls
+          secret:
+            secretName: {{ include "convertigo.redisTlsSecretName" . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           command: ["/bin/sh", "-c", "/home/convertigo/scripts/installCarFiles.sh && /docker-entrypoint.sh convertigo"]
@@ -46,6 +57,14 @@ spec:
               mountPath: /workspace
             - name: c8o-install-car-files
               mountPath: /home/convertigo/scripts
+            {{- if $embeddedRedisTls }}
+            - name: redis-tls
+              mountPath: {{ include "convertigo.redisTlsMountPath" . }}
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
             - name: JAVA_OPTS
               value: {{ include "convertigo.javaOpts" . | quote }}

@@ -168,6 +168,22 @@ auto -> redis when redis.enabled=true, otherwise tomcat.
 {{- end }}
 
 {{/*
+Resolve embedded Redis TLS secret name.
+*/}}
+{{- define "convertigo.redisTlsSecretName" -}}
+{{- $redisTls := default dict .Values.redis.tls -}}
+{{- required "redis.tls.existingSecret must be set when redis.tls.enabled=true" $redisTls.existingSecret -}}
+{{- end }}
+
+{{/*
+Resolve embedded Redis TLS mount path.
+*/}}
+{{- define "convertigo.redisTlsMountPath" -}}
+{{- $redisTls := default dict .Values.redis.tls -}}
+{{- default "/etc/convertigo/redis-tls" $redisTls.mountPath -}}
+{{- end }}
+
+{{/*
 Compose JAVA_OPTS for the main Convertigo container.
 */}}
 {{- define "convertigo.javaOpts" -}}
@@ -189,13 +205,95 @@ Compose JAVA_OPTS for the main Convertigo container.
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.url=%s" $timescaleJdbc)
   -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" $ctx -}}
-{{- if and (eq $sessionMode "redis") $ctx.Values.redis.enabled }}
-  {{- $redisHost := printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
+{{- $sessionRedis := default dict $ctx.Values.sessionStore.redis -}}
+{{- $sessionRedisSsl := default dict $sessionRedis.ssl -}}
+{{- $redisTls := default dict $ctx.Values.redis.tls -}}
+{{- $redisTlsMountPath := include "convertigo.redisTlsMountPath" $ctx -}}
+{{- $redisTlsClientTruststoreKey := default "truststore.p12" $redisTls.clientTruststoreKey -}}
+{{- $redisTlsClientKeystoreKey := default "client.p12" $redisTls.clientKeystoreKey -}}
+{{- $redisTlsUseClientKeystore := and $redisTls.authClients $redisTlsClientKeystoreKey -}}
+{{- if eq $sessionMode "redis" }}
   {{- $opts = append $opts "-Dconvertigo.engine.session.store.mode=redis" }}
-  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
-  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.redis.service.port) }}
-  {{- if and $ctx.Values.redis.auth.enabled $ctx.Values.redis.auth.password }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.redis.auth.password) }}
+  {{- if $ctx.Values.redis.enabled }}
+    {{- $redisHost := printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.redis.service.port) }}
+    {{- if and $ctx.Values.redis.auth.enabled $ctx.Values.redis.auth.password }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.redis.auth.password) }}
+    {{- end }}
+  {{- else }}
+    {{- with $sessionRedis.host }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedis.port }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" .) }}
+    {{- end }}
+    {{- with $sessionRedis.username }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.username=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedis.password }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedis.database }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.database=%v" .) }}
+    {{- end }}
+  {{- end }}
+  {{- if and $ctx.Values.redis.enabled $redisTls.enabled }}
+    {{- $opts = append $opts "-Dconvertigo.engine.session.redis.ssl=true" }}
+    {{- with $redisTlsClientTruststoreKey }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.truststore=%s/%s" $redisTlsMountPath .) }}
+    {{- end }}
+    {{- with $redisTls.truststorePassword }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.truststore.password=%s" .) }}
+    {{- end }}
+    {{- if $redisTlsUseClientKeystore }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.keystore=%s/%s" $redisTlsMountPath $redisTlsClientKeystoreKey) }}
+      {{- with $redisTls.keystorePassword }}
+        {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.keystore.password=%s" .) }}
+      {{- end }}
+      {{- with $redisTls.keystoreType }}
+        {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.keystore.type=%s" .) }}
+      {{- end }}
+    {{- end }}
+    {{- with $redisTls.verificationMode }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.verification.mode=%s" .) }}
+    {{- end }}
+    {{- with $redisTls.protocols }}
+      {{- if kindIs "slice" . }}
+        {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.protocols=%s" (join "," .)) }}
+      {{- else }}
+        {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.protocols=%s" .) }}
+      {{- end }}
+    {{- end }}
+  {{- else }}
+    {{- if $sessionRedisSsl.enabled }}
+      {{- $opts = append $opts "-Dconvertigo.engine.session.redis.ssl=true" }}
+    {{- end }}
+    {{- with $sessionRedisSsl.truststore }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.truststore=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedisSsl.truststorePassword }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.truststore.password=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedisSsl.keystore }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.keystore=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedisSsl.keystorePassword }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.keystore.password=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedisSsl.keystoreType }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.keystore.type=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedisSsl.verificationMode }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.verification.mode=%s" .) }}
+    {{- end }}
+    {{- with $sessionRedisSsl.protocols }}
+      {{- if kindIs "slice" . }}
+        {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.protocols=%s" (join "," .)) }}
+      {{- else }}
+        {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.ssl.protocols=%s" .) }}
+      {{- end }}
+    {{- end }}
   {{- end }}
 {{- end }}
 {{- if $ctx.Values.sharedWorkspaceSync.enabled }}

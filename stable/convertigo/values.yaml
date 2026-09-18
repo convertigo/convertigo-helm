@@ -9,7 +9,9 @@ replicaCount: 1
 rootRedirect: /convertigo/
 
 image:
-  repository: convertigo
+  # 'convertigo/convertigo' is the image published by Convertigo; the Docker Official Image 'convertigo'
+  # carries the same release once it has been reviewed by Docker.
+  repository: convertigo/convertigo
   pullPolicy: IfNotPresent
   jxmx: "1024"
   # Overrides the image tag whose default is the chart appVersion.

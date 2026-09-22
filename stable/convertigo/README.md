@@ -200,6 +200,8 @@ The chart keeps logs and file cache on pod-local storage by injecting:
 
 This avoids log/cache collisions between replicas and avoids accumulating stale per-instance log or cache directories on the shared workspace volume.
 
+The chart also sets `LOG_STDOUT=true` and `LOG_FILE=true`: the engine logs reach the pod standard output, where the cluster log pipeline (Fluent Bit, Fluentd, Filebeat...) can collect them, and stay available in the **Logs** view of the administration console. The log line format, the multi-line rule (`^!` starts a record) and a Fluent Bit example are documented in the [Centralize the logs](https://doc.convertigo.com/documentation/latest/operating-guide/production-deployment-recommendations/#centralize-the-logs) section of the Operating Guide.
+
 Notes on probes:
 - Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
   Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]

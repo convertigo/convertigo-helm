@@ -29,7 +29,7 @@ Find below the values.yaml customization options :
 | name                              | default                | usage |
 |-----------------------------------|------------------------|-------|
 | replicaCount                      | 1                      | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
-| image.repository                  | convertigo/convertigo  | The Docker image repository. Set `convertigo` to use the Docker Official Image, or customize to use another repository. |
+| image.repository                  | convertigo             | The Docker image repository (the Docker Official Image). Customize if you want to use another repository. |
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
@@ -78,7 +78,7 @@ Find below the values.yaml customization options :
 | couchdb.existingSecretPasswordKey |                        | Key inside the existing secret for the CouchDB password. |
 | couchdb.existingSecretOptional    | false                  | Set to true to ignore missing/invalid existing secrets and fall back to inline values. |
 | couchdb.image.repository          | couchdb                | CouchDB image repository. Customize if using another repository. |
-| couchdb.image.tag                 | 3.4.2                  | CouchDB image tag. Customize if using a specific version. |
+| couchdb.image.tag                 | 3.5                    | CouchDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
 | couchdb.password                  | fullsyncpassword       | CouchDB admin password. |
 | couchdb.persistentVolume.storageClass | ebs-sc             | CouchDB PVC storageClass. |

@@ -9,9 +9,7 @@ replicaCount: 1
 rootRedirect: /convertigo/
 
 image:
-  # 'convertigo/convertigo' is the image published by Convertigo; the Docker Official Image 'convertigo'
-  # carries the same release once it has been reviewed by Docker.
-  repository: convertigo/convertigo
+  repository: convertigo
   pullPolicy: IfNotPresent
   jxmx: "1024"
   # Overrides the image tag whose default is the chart appVersion.
@@ -302,7 +300,7 @@ couchdb:
   existingSecretOptional: false
   image:
     repository: couchdb
-    tag: 3.4.2
+    tag: "3.5"
   admin: admin
   password: fullsyncpassword
   persistentVolume:

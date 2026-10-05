@@ -229,6 +229,70 @@ When the session mode resolves to `redis` (explicitly or via `auto`), sticky-ses
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 ```
 
+## Production deployment
+
+The Operating Guide's [Production deployment recommendations](https://doc.convertigo.com/documentation/latest/operating-guide/production-deployment-recommendations/) apply to this chart too. The examples below are optional settings to adapt to your network and ingress controller; they do not change the chart defaults.
+
+### Public origin, HTTPS and error responses
+
+Example override values for the Convertigo chart:
+
+```yaml
+publicAddr: convertigo.example.com
+publicUrl: https://convertigo.example.com
+publicDomains: "https://app.example.com#https://convertigo.example.com"
+additionalJavaOpts:
+  - "-Dconvertigo.engine.hiding_error_information=true"
+  - "-Dconvertigo.engine.hide_product_version_in_api_specs=true"
+ingress:
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+```
+
+`publicAddr` is the hostname used by the ingress and its TLS certificate, whereas `publicUrl` is the full browser origin. `publicDomains` lists the allowed CORS origins and defaults to `publicUrl` when omitted. The image preserves a `cors.policy` already saved in the workspace; update that property in the admin console, or explicitly override it through `additionalJavaOpts` with `-Dconvertigo.engine.cors.policy=...` if necessary. CORS is not an access-control mechanism for non-browser clients.
+
+The chart uses the TLS secret `convertigo-tls`. Provision a certificate for `publicAddr`, or configure your cert-manager issuer (the chart defaults to `letsencrypt-prod`). If TLS terminates at an upstream load balancer instead, adapt the ingress redirect and forwarded-header configuration to that topology to avoid redirect loops. See the ingress-nginx [HTTPS redirect annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#server-side-https-enforcement-through-redirect).
+
+The Java options suppress detailed errors in client responses while keeping them in the engine logs, and hide the product version in API specifications. To retain selected error details instead, leave `hiding_error_information=false` and configure the `show_error_*` properties described in the guide. This does not disable API discovery.
+
+### HSTS belongs to the HTTPS frontend
+
+Configure `Strict-Transport-Security` on the component terminating public HTTPS, not in Convertigo. For ingress-nginx, these are values for the **ingress-nginx controller chart**, not for the Convertigo chart:
+
+```yaml
+controller:
+  config:
+    hsts: "true"
+    hsts-max-age: "31536000"
+    hsts-include-subdomains: "false"
+    hsts-preload: "false"
+```
+
+They apply controller-wide. Enable HSTS only after verifying that the sites are served over HTTPS permanently; enable `includeSubDomains` only if every affected subdomain also supports HTTPS. See the controller's [HSTS configuration](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/#hsts). For other ingress controllers or load balancers, use their equivalent settings.
+
+### Restrict administration and optional API discovery
+
+When end users should not reach the admin console, limit these paths to an administrator network or VPN at the public reverse proxy or gateway, including the forms without a trailing slash:
+
+- `/convertigo/admin` and all paths below it, including `/convertigo/admin/services/`;
+- `/convertigo/login` and `/convertigo/logout`;
+- optionally `/convertigo/api` and all paths below it when public API discovery is not wanted.
+
+The chart's ingress routes the entire `/convertigo/` prefix. It does not provide a value for per-path administration restrictions. For a public application, use a path-aware access policy at your frontend, or disable the chart ingress with `ingress.enabled=false` and manage the public and private routes separately. A private admin route alone does not protect these paths if a public catch-all still forwards them to Convertigo. Keep the server service private so clients cannot bypass the frontend policy, and change the default admin credentials.
+
+If the **whole deployment** is private, ingress-nginx can restrict its ingress to selected source ranges through Convertigo override values:
+
+```yaml
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "192.0.2.0/24,2001:db8::/32"
+```
+
+Replace these documentation ranges with your actual administrator/VPN ranges. This annotation restricts all paths on that ingress, including applications and Baserow, not only the admin console. Check that the controller sees the real client IP through any upstream proxy. See the [source-range annotation](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#whitelist-source-range).
+
+Finally, use a project-root `.httpignore` (Convertigo 8.4.4+) to keep templates, configuration files and other non-public project resources off HTTP; it is independent from ingress access policies.
+
 ## Amazon EKS Storage class
 
 On Amazon EKS you can define the gp3 storage class this way for Containers needing EBS volumes.

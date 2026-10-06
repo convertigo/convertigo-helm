@@ -126,6 +126,22 @@ additionalJavaOpts: []
 extraVolumes: []
 extraVolumeMounts: []
 
+# ====== Local working directory ============================================================================
+# Fast storage local to the pod, not shared between instances, for rebuildable data that would otherwise be
+# written on the shared workspace: the working folders of the mobile applications (generated sources,
+# packages, build cache). Its content is reused when still valid. Convertigo 8.5.0 and later.
+localWork:
+  enabled: true
+  mountPath: /tmp/convertigo-work
+  # Any Kubernetes volume source. Default: the local disk of the node, kept across container restarts and
+  # deleted with the pod, counted in its ephemeral-storage. "medium: Memory" (tmpfs) is counted in the pod
+  # memory limit. A dedicated persistentVolumeClaim keeps it across pod restarts (single instance). A hostPath
+  # volume is not recommended: forbidden by the baseline and restricted Pod Security standards, it ties the pod
+  # to a node and is never cleaned up.
+  volume:
+    emptyDir:
+      sizeLimit: 20Gi
+
 # ====== Session store (sticky or stateless) ================================================================
 sessionStore:
   # auto: use redis if redis.enabled=true, otherwise tomcat.

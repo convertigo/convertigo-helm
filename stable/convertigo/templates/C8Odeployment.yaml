@@ -43,6 +43,10 @@ spec:
           secret:
             secretName: {{ include "convertigo.redisTlsSecretName" . }}
         {{- end }}
+        {{- if .Values.localWork.enabled }}
+        - name: c8o-local-work
+          {{- toYaml .Values.localWork.volume | nindent 10 }}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -61,6 +65,10 @@ spec:
             - name: redis-tls
               mountPath: {{ include "convertigo.redisTlsMountPath" . }}
               readOnly: true
+            {{- end }}
+            {{- if .Values.localWork.enabled }}
+            - name: c8o-local-work
+              mountPath: {{ .Values.localWork.mountPath }}
             {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}

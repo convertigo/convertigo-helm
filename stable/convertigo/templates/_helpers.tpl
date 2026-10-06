@@ -299,6 +299,9 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- if $ctx.Values.sharedWorkspaceSync.enabled }}
   {{- $opts = append $opts "-Dconvertigo.engine.session.shared_workspace.sync.enabled=true" }}
 {{- end }}
+{{- if $ctx.Values.localWork.enabled }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.local_work.directory=%s" $ctx.Values.localWork.mountPath) }}
+{{- end }}
 {{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}
 {{- range $extra := $extraOpts }}
   {{- if $extra }}

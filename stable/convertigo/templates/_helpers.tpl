@@ -302,6 +302,13 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- if $ctx.Values.localWork.enabled }}
   {{- $opts = append $opts (printf "-Dconvertigo.engine.local_work.directory=%s" $ctx.Values.localWork.mountPath) }}
 {{- end }}
+{{- /* imposed only when set: empty leaves the decision to the configuration of the server */ -}}
+{{- if not (kindIs "invalid" $ctx.Values.allowWebStudio) }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.allow_web_studio=%t" (eq (toString $ctx.Values.allowWebStudio) "true")) }}
+{{- end }}
+{{- if not (kindIs "invalid" $ctx.Values.allowServerBuild) }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.allow_server_build=%t" (eq (toString $ctx.Values.allowServerBuild) "true")) }}
+{{- end }}
 {{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}
 {{- range $extra := $extraOpts }}
   {{- if $extra }}

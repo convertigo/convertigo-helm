@@ -142,6 +142,15 @@ localWork:
     emptyDir:
       sizeLimit: 20Gi
 
+# ====== Web Studio and builds on the server ================================================================
+# Convertigo 8.5.0 and later. Empty (default): the administrators decide in the configuration of the server,
+# where both start disabled. true or false: imposed by the chart, the configuration cannot change it.
+# Allow the web Studio in the administration console, to edit projects on the server (allow_web_studio).
+allowWebStudio:
+# Allow the server to build: download nodejs, install npm packages, build the mobile applications
+# (allow_server_build).
+allowServerBuild:
+
 # ====== Session store (sticky or stateless) ================================================================
 sessionStore:
   # auto: use redis if redis.enabled=true, otherwise tomcat.

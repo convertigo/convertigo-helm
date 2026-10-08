@@ -144,12 +144,16 @@ localWork:
 
 # ====== Web Studio and builds on the server ================================================================
 # Convertigo 8.5.0 and later. Empty (default): the administrators decide in the configuration of the server,
-# where both start disabled. true or false: imposed by the chart, the configuration cannot change it.
-# Allow the web Studio in the administration console, to edit projects on the server (allow_web_studio).
-allowWebStudio:
-# Allow the server to build: download nodejs, install npm packages, build the mobile applications
-# (allow_server_build).
-allowServerBuild:
+# where web_studio starts disabled and server_build none. A value: imposed by the chart, the configuration
+# cannot change it.
+# Web Studio in the administration console, to edit projects on the server (web_studio): disabled or enabled.
+webStudio:
+# What the server builds (server_build), each level including those before it:
+#   none     nothing
+#   sources  the Java sources of the projects (libs/src)
+#   studio   the builds started from the web Studio: nodejs, npm packages, applications
+#   all      the applications deployed without their build, built at startup
+serverBuild:
 
 # ====== Session store (sticky or stateless) ================================================================
 sessionStore:

@@ -303,11 +303,17 @@ Compose JAVA_OPTS for the main Convertigo container.
   {{- $opts = append $opts (printf "-Dconvertigo.engine.local_work.directory=%s" $ctx.Values.localWork.mountPath) }}
 {{- end }}
 {{- /* imposed only when set: empty leaves the decision to the configuration of the server */ -}}
-{{- if not (kindIs "invalid" $ctx.Values.allowWebStudio) }}
-  {{- $opts = append $opts (printf "-Dconvertigo.engine.allow_web_studio=%t" (eq (toString $ctx.Values.allowWebStudio) "true")) }}
+{{- with $ctx.Values.webStudio }}
+  {{- if not (has (toString .) (list "disabled" "enabled")) }}
+    {{- fail (printf "webStudio must be disabled or enabled, not %v" .) }}
+  {{- end }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.web_studio=%s" (toString .)) }}
 {{- end }}
-{{- if not (kindIs "invalid" $ctx.Values.allowServerBuild) }}
-  {{- $opts = append $opts (printf "-Dconvertigo.engine.allow_server_build=%t" (eq (toString $ctx.Values.allowServerBuild) "true")) }}
+{{- with $ctx.Values.serverBuild }}
+  {{- if not (has (toString .) (list "none" "sources" "studio" "all")) }}
+    {{- fail (printf "serverBuild must be none, sources, studio or all, not %v" .) }}
+  {{- end }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.server_build=%s" (toString .)) }}
 {{- end }}
 {{- $extraOpts := (default (list) $ctx.Values.additionalJavaOpts) -}}
 {{- range $extra := $extraOpts }}

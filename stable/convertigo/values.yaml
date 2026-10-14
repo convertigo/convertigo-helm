@@ -134,11 +134,22 @@ sessionStore:
   redis:
     # Optional client settings, mainly for external Redis when redis.enabled=false.
     # Embedded Redis still uses the redis.* server settings below.
+    # single (default) or sentinel (Convertigo 8.4.7+; external Redis only).
+    topology: single
     host: ""
     port: ""
     username: ""
     password: ""
     database: ""
+    sentinel:
+      # Deploy Redis/Sentinel separately. Requires mode: redis and redis.enabled: false.
+      master: ""
+      # Seed nodes as host:port, for example sentinel-0.redis.svc.cluster.local:26379.
+      nodes: []
+      # Optional Sentinel ACL credentials, independent of Redis data credentials above.
+      username: ""
+      # Empty: use the Redis data password if Sentinel requires authentication.
+      password: ""
     ssl:
       enabled: false
       truststore: ""

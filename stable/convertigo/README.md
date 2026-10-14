@@ -37,11 +37,16 @@ Find below the values.yaml customization options :
 | extraVolumeMounts                 | []                     | Extra volume mounts for the Convertigo container. |
 | sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
 | sessionStore.redis.*              |                        | Optional Redis client settings used when `sessionStore.mode=redis` and `redis.enabled=false`. |
+| sessionStore.redis.topology       | single                 | `single` or `sentinel`. Sentinel requires Convertigo 8.4.7+ and an external Redis/Sentinel deployment. |
+| sessionStore.redis.sentinel.master |                       | Monitored master name declared in Sentinel (required in sentinel mode). |
+| sessionStore.redis.sentinel.nodes | []                     | Sentinel seed addresses as a YAML list of `host:port` (or comma-separated string). Required in sentinel mode. |
+| sessionStore.redis.sentinel.username |                     | Optional Sentinel ACL username, distinct from the Redis data username. |
+| sessionStore.redis.sentinel.password |                     | Optional Sentinel password. Empty: use the Redis data password if Sentinel requires authentication. |
 | sessionStore.redis.ssl.*          |                        | Optional Redis TLS/mTLS client settings: truststore, keystore, verification mode, and protocols. |
 | sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
 | webStudio                         |                        | Convertigo 8.5.0+. Web Studio in the administration console (`web_studio`): `disabled` or `enabled`. Empty: the administrators decide in the configuration, disabled at first. A value: imposed, the configuration cannot change it. |
 | serverBuild                       |                        | Convertigo 8.5.0+. What the server builds (`server_build`), each level including those before it: `none`, `sources` (Java sources of the projects), `studio` (builds started from the web Studio: nodejs, npm packages, applications), `all` (applications deployed without their build, built at startup). Empty: the administrators decide in the configuration, `none` at first. A value: imposed. |
-| redis.enabled                     | false                  | Deploy the embedded Redis service used for stateless sessions. When false, the chart does not configure Redis in Convertigo. |
+| redis.enabled                     | false                  | Deploy the embedded standalone Redis service. When false, use `sessionStore.mode=redis` and `sessionStore.redis.*` to configure external Redis. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
 | redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
 | redis.tls.enabled                 | false                  | Enable TLS on the embedded Redis and configure Convertigo to connect with `rediss`. |
@@ -144,6 +149,71 @@ extraVolumeMounts:
     mountPath: /etc/convertigo/redis
     readOnly: true
 ```
+
+## External Redis Sentinel for session store
+
+Requires **Convertigo 8.4.7 or later**. The default `single` topology and the embedded
+standalone Redis are unchanged. This chart configures only the Convertigo client;
+it does not install Sentinel or manage its quorum, replication or failover.
+
+Deploy the Redis master, replicas and Sentinel nodes separately, for example using
+the [CloudPirates Redis chart](https://github.com/CloudPirates-io/helm-charts/tree/main/charts/redis)
+or an existing managed Sentinel service. For production, use at least three
+Sentinels with quorum two, distributed across failure domains, and Redis replicas.
+Configure Sentinel-to-Redis authentication, persistence, TLS and anti-affinity in
+that dedicated deployment, not in the Convertigo chart.
+
+Replace the example DNS names with the endpoints advertised by that deployment:
+
+```yaml
+image:
+  tag: "8.4.7" # Select a Sentinel-capable Convertigo image, not an older chart default.
+redis:
+  enabled: false
+sessionStore:
+  mode: redis
+  redis:
+    topology: sentinel
+    database: 0
+    username: default
+    password: REDIS_DATA_PASSWORD
+    sentinel:
+      master: mymaster
+      nodes:
+        - sentinel-0.redis.example.svc.cluster.local:26379
+        - sentinel-1.redis.example.svc.cluster.local:26379
+        - sentinel-2.redis.example.svc.cluster.local:26379
+      # Optional ACL credentials for the Sentinel endpoints, not the Redis data nodes.
+      username: default
+      password: SENTINEL_PASSWORD
+```
+
+The single-server `host` and `port` are ignored in Sentinel mode. Seed nodes are
+used to discover the current master and other Sentinels. Every advertised address
+(including a promoted replica) must be reachable from the Convertigo pods; a
+load-balanced master service alone is not sufficient. Keep credential values out
+of source control and protect the Helm values/release data as for the existing
+Redis password settings.
+
+**Client limitation:** with the current Redisson 4.3.1 client, configuring a
+Sentinel password requires a Redis data password as well. Sentinel-only password
+authentication (unprotected data nodes) is explicitly rejected by Convertigo.
+Separate passwords and ACL users are supported when both endpoints authenticate.
+This is not a Redis Sentinel protocol requirement.
+
+The existing `sessionStore.redis.ssl.*` settings apply to **both** Sentinel and
+Redis data connections. For TLS/mTLS, mount stores as in the external Redis
+example above. All nodes must expose TLS, trust the client certificate when mTLS
+is required, and have certificates valid for their advertised hostnames when
+using `STRICT` verification. Mixed plaintext/TLS topologies are not supported.
+
+Convertigo reads and subscribes on the master, automatically follows Sentinel
+failover, and exposes the configured topology, master name, seed nodes and current master address in
+`engine.ListInstances`. Requests may wait or fail during election. Replication is
+asynchronous: a promoted replica can lose acknowledged writes that had not yet
+replicated, including session changes, locks and in-flight request markers.
+Sentinel is not an exactly-once execution guarantee; design retry-sensitive
+operations accordingly. See [Redis Sentinel guarantees](https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/).
 
 ## Embedded Redis TLS/mTLS
 

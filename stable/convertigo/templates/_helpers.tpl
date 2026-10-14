@@ -206,6 +206,40 @@ Compose JAVA_OPTS for the main Convertigo container.
   -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" $ctx -}}
 {{- $sessionRedis := default dict $ctx.Values.sessionStore.redis -}}
+{{- $redisTopology := default "single" $sessionRedis.topology -}}
+{{- $sentinel := default dict $sessionRedis.sentinel -}}
+{{- $sentinelNodes := list -}}
+{{- if not (has $redisTopology (list "single" "sentinel")) -}}
+  {{- fail "sessionStore.redis.topology must be single or sentinel" -}}
+{{- end -}}
+{{- if eq $redisTopology "sentinel" -}}
+  {{- if or $ctx.Values.redis.enabled (ne $sessionMode "redis") -}}
+    {{- fail "Sentinel requires sessionStore.mode=redis and redis.enabled=false; deploy Redis/Sentinel with a dedicated chart" -}}
+  {{- end -}}
+  {{- if or (not (trim (toString (default "" $sentinel.master)))) (not $sentinel.nodes) -}}
+    {{- fail "Sentinel requires sessionStore.redis.sentinel.master and sessionStore.redis.sentinel.nodes" -}}
+  {{- end -}}
+  {{- if not (regexMatch "^[a-zA-Z0-9_.-]+$" (toString $sentinel.master)) -}}
+    {{- fail "sessionStore.redis.sentinel.master must contain only letters, digits, dots, underscores or hyphens" -}}
+  {{- end -}}
+  {{- $nodes := $sentinel.nodes -}}
+  {{- if kindIs "string" $nodes -}}
+    {{- $nodes = regexSplit "[,[:space:]]+" (trim $nodes) -1 -}}
+  {{- else if not (kindIs "slice" $nodes) -}}
+    {{- fail "sessionStore.redis.sentinel.nodes must be a host:port list or comma-separated string" -}}
+  {{- end -}}
+  {{- range $node := $nodes -}}
+    {{- $node = trim (toString $node) -}}
+    {{- if not (regexMatch "^([a-zA-Z0-9.-]+|\\[[0-9a-fA-F:.%]+\\]):[0-9]+$" $node) -}}
+      {{- fail "sessionStore.redis.sentinel.nodes must contain host:port addresses without credentials" -}}
+    {{- end -}}
+    {{- $port := atoi (last (splitList ":" $node)) -}}
+    {{- if or (lt $port 1) (gt $port 65535) -}}
+      {{- fail "sessionStore.redis.sentinel.nodes ports must be between 1 and 65535" -}}
+    {{- end -}}
+    {{- $sentinelNodes = append $sentinelNodes $node -}}
+  {{- end -}}
+{{- end -}}
 {{- $sessionRedisSsl := default dict $sessionRedis.ssl -}}
 {{- $redisTls := default dict $ctx.Values.redis.tls -}}
 {{- $redisTlsMountPath := include "convertigo.redisTlsMountPath" $ctx -}}
@@ -214,6 +248,17 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- $redisTlsUseClientKeystore := and $redisTls.authClients $redisTlsClientKeystoreKey -}}
 {{- if eq $sessionMode "redis" }}
   {{- $opts = append $opts "-Dconvertigo.engine.session.store.mode=redis" }}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.topology=%s" $redisTopology) }}
+  {{- if eq $redisTopology "sentinel" }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.sentinel.master=%s" $sentinel.master) }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.sentinel.nodes=%s" (join "," (uniq $sentinelNodes))) }}
+    {{- with $sentinel.username }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.sentinel.username=%s" .) }}
+    {{- end }}
+    {{- with $sentinel.password }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.sentinel.password=%s" .) }}
+    {{- end }}
+  {{- end }}
   {{- if $ctx.Values.redis.enabled }}
     {{- $redisHost := printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
     {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}

@@ -205,6 +205,14 @@ example above. All nodes must expose TLS, trust the client certificate when mTLS
 is required, and have certificates valid for their advertised hostnames when
 using `STRICT` verification. Mixed plaintext/TLS topologies are not supported.
 
+By default Sentinel advertises nodes by IP address. With `STRICT` verification,
+make each node advertise a host name present in its certificate
+(`replica-announce-ip` on Redis nodes; `sentinel resolve-hostnames yes`,
+`sentinel announce-hostnames yes` and `sentinel announce-ip` on Sentinels), or set
+`sessionStore.redis.ssl.verificationMode: CA_ONLY` to keep chain validation and
+mTLS without host name checks. A host name mismatch shows in the Convertigo log as
+`No subject alternative names matching IP address ...`.
+
 Convertigo reads and subscribes on the master, automatically follows Sentinel
 failover, and exposes the configured topology, master name, seed nodes and current master address in
 `engine.ListInstances`. Requests may wait or fail during election. Replication is

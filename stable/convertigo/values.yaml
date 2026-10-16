@@ -143,8 +143,9 @@ sessionStore:
     # Convertigo 8.4.7+. When Redis is unreachable at startup: none (retry until it is reachable, the pod
     # stays not ready meanwhile) or tomcat (local sessions until the pod restarts). Empty: none.
     startupFallback: ""
-    # Convertigo 8.4.7+. Seconds Redis can be unreachable, once connected, before the readiness fails
-    # (a Sentinel failover must not remove every pod from the Service). Empty: 60.
+    # Convertigo 8.4.7+. Seconds Redis can be unreachable, once connected, before the supervision reports
+    # convertigo.session.store=KO and the readiness probe starts failing (a Sentinel failover must not
+    # remove every pod from the Service). Empty: 60.
     readinessGrace: ""
     host: ""
     port: ""

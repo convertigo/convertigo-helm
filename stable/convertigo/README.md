@@ -302,9 +302,10 @@ behaves according to `sessionStore.redis.startupFallback`:
 | `none` (default) | The pod retries in background (backoff up to 30 s) and reports `convertigo.session.store=KO`: it stays out of the Service. Requests that need a session get `503` with `Retry-After`; stateless requests still work. Once Redis is reachable, the pod connects, becomes ready and shares its sessions with the other pods, without restart. |
 | `tomcat` | No retry: the pod keeps its sessions in memory until it is restarted and reports `convertigo.session.store=DEGRADED` (still ready). Sessions are not shared with the other pods: use it only with a single replica or sticky sessions. |
 
-Once connected, a pod that loses Redis stays ready for `sessionStore.redis.readinessGrace` seconds
-(default 60) so that a Sentinel failover does not remove every pod from the Service, then becomes not
-ready until Redis is back.
+Once connected, a pod that loses Redis reports `OK` for `sessionStore.redis.readinessGrace` seconds
+(default 60) so that a Sentinel failover does not remove every pod from the Service, then reports
+`KO` until Redis is back. With the default probe (`periodSeconds: 10`, `failureThreshold: 3`), the
+pod leaves the Service about 30 seconds later.
 
 During a rollout, a new pod waiting for Redis keeps the old pods running (rolling update). Kubernetes
 reports the rollout as failed after `progressDeadlineSeconds` (600 by default) without stopping it;

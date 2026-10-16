@@ -3,14 +3,21 @@
 A highly available Redis for Convertigo sessions, deployed with its own chart next to the
 Convertigo chart: 1 master, 2 replicas and 3 Sentinels, every connection in mutual TLS.
 Requires **Convertigo 8.4.7 or later** (`session.redis.topology=sentinel`).
-The `sessionStore.redis.topology` and `sessionStore.redis.sentinel.*` values come with the next
-Convertigo chart release; until then, use the chart from the `develop` branch of this repository
+The `sessionStore.redis.topology` and `sessionStore.redis.sentinel.*` values come with the
+Convertigo chart 8.4.7; until it is published, use the chart from this repository
 (`./stable/convertigo` in the commands below).
 
 | File | Content |
 | --- | --- |
 | [redis-values.yaml](redis-values.yaml) | Values for the [CloudPirates Redis chart](https://github.com/CloudPirates-io/helm-charts/tree/main/charts/redis), which uses the official `redis` image |
 | [convertigo-values.yaml](convertigo-values.yaml) | Values to add to your Convertigo chart values |
+
+Other Redis charts with Sentinel and TLS can be used with the same Convertigo settings, for example
+[redis-ha](https://github.com/DandyDeveloper/charts/tree/master/charts/redis-ha) (official image,
+Sentinel, TLS); it has **not** been tested with Convertigo. Whatever the chart, keep the points of
+this example: TLS-only ports with client certificates, nodes and Sentinels advertised by host names
+covered by the certificate, the master waiting for a failover before stopping, and a
+PodDisruptionBudget.
 
 Tested on Kubernetes 1.33 with Redis chart 0.37.2 (Redis 8.10.2) and Convertigo 8.4.7: STRICT
 certificate verification, sessions shared by two Convertigo pods, rolling restart of Redis and

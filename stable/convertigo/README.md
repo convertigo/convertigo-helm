@@ -42,6 +42,9 @@ Find below the values.yaml customization options :
 | sessionStore.redis.sentinel.nodes | []                     | Sentinel seed addresses as a YAML list of `host:port` (or comma-separated string). Required in sentinel mode. |
 | sessionStore.redis.sentinel.username |                     | Optional Sentinel ACL username, distinct from the Redis data username. |
 | sessionStore.redis.sentinel.password |                     | Optional Sentinel password. Empty: use the Redis data password if Sentinel requires authentication. |
+| sessionStore.redis.startupFallback |                       | Convertigo 8.4.7+. Behavior when Redis is unreachable at startup: `none` (default: retry in background, pod not ready meanwhile, ready by itself once Redis is reachable) or `tomcat` (local sessions until the pod restarts, no retry). See [Redis unreachable at startup](#redis-unreachable-at-startup). |
+| sessionStore.redis.readinessGrace |                        | Convertigo 8.4.7+. Seconds Redis can be unreachable, once connected, before the pod becomes not ready (default 60, covers a Sentinel failover). |
+| progressDeadlineSeconds           |                        | Seconds a rollout waits for ready pods before being reported as failed (Kubernetes default 600). |
 | sessionStore.redis.ssl.*          |                        | Optional Redis TLS/mTLS client settings: truststore, keystore, verification mode, and protocols. |
 | sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
 | redis.enabled                     | false                  | Deploy the embedded standalone Redis service. When false, use `sessionStore.mode=redis` and `sessionStore.redis.*` to configure external Redis. |
@@ -284,10 +287,29 @@ This avoids log/cache collisions between replicas and avoids accumulating stale 
 The chart also sets `LOG_STDOUT=true` and `LOG_FILE=true`: the engine logs reach the pod standard output, where the cluster log pipeline (Fluent Bit, Fluentd, Filebeat...) can collect them, and stay available in the **Logs** view of the administration console. The log line format, the multi-line rule (`^!` starts a record) and a Fluent Bit example are documented in the [Centralize the logs](https://doc.convertigo.com/documentation/latest/operating-guide/production-deployment-recommendations/#centralize-the-logs) section of the Operating Guide.
 
 Notes on probes:
-- Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
-  Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+- The default readiness probe is an exec probe on the supervision endpoint: the pod is ready when it reports `convertigo.started=OK` and does not report `convertigo.session.store=KO` (Convertigo 8.4.7+; older images do not report this line and only `convertigo.started` is checked).
+- The liveness probe only checks that the endpoint answers: an unreachable Redis never restarts the pod.
 - If exec is not provided or not supported by the image, the chart falls back to httpGet (ensure port name/number matches container ports).
 - Exec probes require shell + curl + grep in the image; otherwise prefer httpGet.
+
+## Redis unreachable at startup
+
+With `sessionStore.mode=redis` and Convertigo 8.4.7+, a pod that cannot reach Redis when it starts
+behaves according to `sessionStore.redis.startupFallback`:
+
+| Value | Behavior |
+| --- | --- |
+| `none` (default) | The pod retries in background (backoff up to 30 s) and reports `convertigo.session.store=KO`: it stays out of the Service. Requests that need a session get `503` with `Retry-After`; stateless requests still work. Once Redis is reachable, the pod connects, becomes ready and shares its sessions with the other pods, without restart. |
+| `tomcat` | No retry: the pod keeps its sessions in memory until it is restarted and reports `convertigo.session.store=DEGRADED` (still ready). Sessions are not shared with the other pods: use it only with a single replica or sticky sessions. |
+
+Once connected, a pod that loses Redis stays ready for `sessionStore.redis.readinessGrace` seconds
+(default 60) so that a Sentinel failover does not remove every pod from the Service, then becomes not
+ready until Redis is back.
+
+During a rollout, a new pod waiting for Redis keeps the old pods running (rolling update). Kubernetes
+reports the rollout as failed after `progressDeadlineSeconds` (600 by default) without stopping it;
+raise it when the network can take longer to open the flows to Redis, and use a `helm --timeout`
+consistent with it when `--wait` is used.
 
 ## Needed annotations for nginx
 

@@ -11,6 +11,9 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  {{- with .Values.progressDeadlineSeconds }}
+  progressDeadlineSeconds: {{ . }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}

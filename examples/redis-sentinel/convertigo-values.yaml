@@ -1,0 +1,40 @@
+# Convertigo chart values: sessions in the Redis Sentinel deployment of redis-values.yaml.
+# Requires Convertigo 8.4.7+. Namespace in the addresses below: convertigo (replace with yours).
+replicaCount: 2
+
+redis:
+  # No embedded Redis: it is deployed by its own chart.
+  enabled: false
+
+sessionStore:
+  mode: redis
+  redis:
+    topology: sentinel
+    # Redis data password (same secret as the Redis deployment), passed at install time:
+    #   --set-string sessionStore.redis.password="$(kubectl get secret redis-sessions-auth -o jsonpath='{.data.redis-password}' | base64 -d)"
+    password: ""
+    sentinel:
+      master: sessions
+      nodes:
+        - redis-sessions-0.redis-sessions-headless.convertigo.svc.cluster.local:26379
+        - redis-sessions-1.redis-sessions-headless.convertigo.svc.cluster.local:26379
+        - redis-sessions-2.redis-sessions-headless.convertigo.svc.cluster.local:26379
+    ssl:
+      enabled: true
+      # CA of the Redis certificates, and the Convertigo client certificate for mTLS.
+      truststore: /etc/convertigo/redis-client/truststore.p12
+      truststorePassword: changeit
+      keystore: /etc/convertigo/redis-client/client.p12
+      keystorePassword: changeit
+      keystoreType: PKCS12
+      # Empty = STRICT: certificate chain and host name are both verified.
+      verificationMode: ""
+
+extraVolumes:
+  - name: redis-client
+    secret:
+      secretName: convertigo-redis-client
+extraVolumeMounts:
+  - name: redis-client
+    mountPath: /etc/convertigo/redis-client
+    readOnly: true

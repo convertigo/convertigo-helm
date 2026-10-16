@@ -158,7 +158,9 @@ it does not install Sentinel or manage its quorum, replication or failover.
 
 Deploy the Redis master, replicas and Sentinel nodes separately, for example using
 the [CloudPirates Redis chart](https://github.com/CloudPirates-io/helm-charts/tree/main/charts/redis)
-or an existing managed Sentinel service. For production, use at least three
+or an existing managed Sentinel service. A tested example with mTLS, its values for both charts,
+a rolling procedure and measured failover times is in
+[examples/redis-sentinel](https://github.com/convertigo/convertigo-helm/tree/develop/examples/redis-sentinel). For production, use at least three
 Sentinels with quorum two, distributed across failure domains, and Redis replicas.
 Configure Sentinel-to-Redis authentication, persistence, TLS and anti-affinity in
 that dedicated deployment, not in the Convertigo chart.

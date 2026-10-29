@@ -50,6 +50,17 @@ serviceAccount:
 
 podAnnotations: {}
 
+# Root init container (volume-mount-hack) that chowns the /workspace volume to the
+# Convertigo user before the server starts.
+# It can be disabled when:
+# - the image runs as root (the default): its entrypoint already chowns /workspace
+#   and then drops to the convertigo user;
+# - podSecurityContext.fsGroup is set: the kubelet makes the volume group-writable.
+# Clusters that drop all capabilities (Pod Security "restricted") need it disabled,
+# since a chown without CAP_CHOWN fails.
+workspaceOwnershipInit:
+  enabled: true
+
 podSecurityContext: {}
   # fsGroup: 2000
   # runAsUser: 1001

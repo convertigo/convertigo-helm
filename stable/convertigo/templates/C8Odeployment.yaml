@@ -126,6 +126,7 @@ spec:
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+      {{- if .Values.workspaceOwnershipInit.enabled }}
       initContainers:
         - command:
           - 'sh'
@@ -141,6 +142,7 @@ spec:
           volumeMounts:
               - name: c8o-workspace
                 mountPath: /workspace
+      {{- end }}
       
       {{- with .Values.nodeSelector }}
       nodeSelector:

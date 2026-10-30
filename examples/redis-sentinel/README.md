@@ -3,6 +3,9 @@
 A highly available Redis for Convertigo sessions, deployed with its own chart next to the
 Convertigo chart: 1 master, 2 replicas and 3 Sentinels, every connection in mutual TLS.
 Requires **Convertigo 8.4.7 or later** (`session.redis.topology=sentinel`).
+The Convertigo chart can also deploy a simpler Redis Sentinel itself, with `redis.sentinel.enabled=true`
+(see [Embedded Redis Sentinel](../../stable/convertigo/README.md#embedded-redis-sentinel)); this example
+is for a Redis deployed and operated separately.
 The `sessionStore.redis.topology` and `sessionStore.redis.sentinel.*` values come with the
 Convertigo chart 8.4.7; until it is published, use the chart from this repository
 (`./stable/convertigo` in the commands below).

@@ -289,7 +289,7 @@ This avoids log/cache collisions between replicas and avoids accumulating stale 
 The chart also sets `LOG_STDOUT=true` and `LOG_FILE=true`: the engine logs reach the pod standard output, where the cluster log pipeline (Fluent Bit, Fluentd, Filebeat...) can collect them, and stay available in the **Logs** view of the administration console. The log line format, the multi-line rule (`^!` starts a record) and a Fluent Bit example are documented in the [Centralize the logs](https://doc.convertigo.com/documentation/latest/operating-guide/production-deployment-recommendations/#centralize-the-logs) section of the Operating Guide.
 
 Notes on probes:
-- The default readiness probe is an exec probe on the supervision endpoint: the pod is ready when it reports `convertigo.started=OK` and does not report `convertigo.session.store=KO` (Convertigo 8.4.7+; older images do not report this line and only `convertigo.started` is checked).
+- The default readiness probe is an exec probe on the supervision endpoint: the pod is ready when it reports `convertigo.started=OK` and reports neither `convertigo.projects=KO` (the projects of its workspace are still being loaded at startup) nor `convertigo.session.store=KO` (Convertigo 8.4.7+; older images do not report these lines and only `convertigo.started` is checked).
 - The liveness probe only checks that the endpoint answers: an unreachable Redis never restarts the pod.
 - If exec is not provided or not supported by the image, the chart falls back to httpGet (ensure port name/number matches container ports).
 - Exec probes require shell + curl + grep in the image; otherwise prefer httpGet.

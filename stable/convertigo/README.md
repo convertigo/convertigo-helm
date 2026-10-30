@@ -31,6 +31,7 @@ Find below the values.yaml customization options :
 | replicaCount                      | 1                      | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
 | image.repository                  | convertigo             | The Docker image repository (the Docker Official Image). Customize if you want to use another repository. |
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
+| image.pullPolicy                  | IfNotPresent           | Image pull policy. The hotfix and develop branches of this repository use `convertigo/convertigo-ci` with the tag of the branch and `Always`; published charts use the official image. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
 | extraVolumes                      | []                     | Extra volumes mounted on the Convertigo pod, for example Redis TLS secrets. |

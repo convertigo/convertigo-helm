@@ -13,11 +13,14 @@ progressDeadlineSeconds: ""
 rootRedirect: /convertigo/
 
 image:
-  repository: convertigo
-  pullPolicy: IfNotPresent
+  # The hotfix and develop branches of this chart use the image built from the same branch of Convertigo
+  # (convertigo/convertigo-ci, tag hotfix or develop, always pulled). A release on master must restore the
+  # official image: repository convertigo, pullPolicy IfNotPresent, tag "" (tests/release-image.sh).
+  repository: convertigo/convertigo-ci
+  pullPolicy: Always
   jxmx: "1024"
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "hotfix"
 
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:

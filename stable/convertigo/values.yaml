@@ -6,6 +6,10 @@
 #You can scale up or down this number depending on your needs
 replicaCount: 1
 
+# Seconds a rollout can wait for new pods to become ready before Kubernetes reports it as failed
+# (Kubernetes default: 600). Raise it when a new pod may wait long for Redis (network convergence).
+progressDeadlineSeconds: ""
+
 rootRedirect: /convertigo/
 
 image:
@@ -165,6 +169,13 @@ sessionStore:
     # Embedded Redis still uses the redis.* server settings below.
     # single (default) or sentinel (Convertigo 8.4.7+; external Redis only).
     topology: single
+    # Convertigo 8.4.7+. When Redis is unreachable at startup: none (retry until it is reachable, the pod
+    # stays not ready meanwhile) or tomcat (local sessions until the pod restarts). Empty: none.
+    startupFallback: ""
+    # Convertigo 8.4.7+. Seconds Redis can be unreachable, once connected, before the supervision reports
+    # convertigo.session.store=KO and the readiness probe starts failing (a Sentinel failover must not
+    # remove every pod from the Service). Empty: 60.
+    readinessGrace: ""
     host: ""
     port: ""
     username: ""
@@ -259,8 +270,9 @@ readinessProbe:
   # If exec.command is provided, the template will use exec to validate readiness (allows checking response body).
   # Otherwise httpGet will be used.
   exec:
-    # example: checks that the body contains convertigo.started=OK
-    command: ["sh", "-c", "curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+    # Ready when the engine is started and, in Redis mode (Convertigo 8.4.7+), its session store is usable.
+    # Older images do not report convertigo.session.store: only convertigo.started is checked for them.
+    command: ["sh", "-c", "s=$(curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.session.store=KO'"]
   httpGet:
     path: /convertigo/admin/services/engine.Supervision
     port: http

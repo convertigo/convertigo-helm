@@ -79,8 +79,9 @@ helm upgrade --install convertigo ./stable/convertigo \
     -o jsonpath='{.data.redis-password}' | base64 -d)"
 ```
 
-Install Redis first: a Convertigo pod started while Redis is unreachable keeps its sessions in
-memory until it is restarted.
+Install Redis first: a Convertigo pod started while Redis is unreachable stays not ready and
+retries until Redis is reachable (see
+[Redis unreachable at startup](../../stable/convertigo/README.md#redis-unreachable-at-startup)).
 
 ## Checks
 
@@ -95,11 +96,11 @@ In each Convertigo pod log:
 
 ```text
 (ConvertigoSessionManager) Redis session store: topology=sentinel, master=sessions, sentinels=rediss://...
-(ConvertigoSessionManager) store=redis, provider=RedisSessionProvider
+(ConvertigoSessionManager) store=redis, provider=RedisSessionProvider, state=OK
 ```
 
-`provider=LegacySessionProvider` means the connection failed at startup: the cause is logged just
-before. Once logged in to the administration console, `/convertigo/admin/services/engine.ListInstances`
+`state=WAITING` means Redis was not reachable at startup: the cause is logged just before, and the
+pod retries until `Redis is reachable: the session store is operational` is logged. Once logged in to the administration console, `/convertigo/admin/services/engine.ListInstances`
 shows the topology, the current master address and every Convertigo instance.
 
 With `STRICT` verification, `No subject alternative names matching IP address ...` means a node

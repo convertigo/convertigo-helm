@@ -249,6 +249,15 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- if eq $sessionMode "redis" }}
   {{- $opts = append $opts "-Dconvertigo.engine.session.store.mode=redis" }}
   {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.topology=%s" $redisTopology) }}
+  {{- with $sessionRedis.startupFallback }}
+    {{- if not (has (toString .) (list "none" "tomcat")) }}
+      {{- fail "sessionStore.redis.startupFallback must be none or tomcat" -}}
+    {{- end }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.startup.fallback=%s" .) }}
+  {{- end }}
+  {{- with $sessionRedis.readinessGrace }}
+    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.readiness.grace=%v" .) }}
+  {{- end }}
   {{- if eq $redisTopology "sentinel" }}
     {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.sentinel.master=%s" $sentinel.master) }}
     {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.sentinel.nodes=%s" (join "," (uniq $sentinelNodes))) }}

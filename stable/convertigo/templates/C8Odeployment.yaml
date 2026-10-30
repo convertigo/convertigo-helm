@@ -1,6 +1,8 @@
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
 {{- $redisTls := default dict .Values.redis.tls -}}
-{{- $embeddedRedisTls := and (eq $sessionMode "redis") .Values.redis.enabled $redisTls.enabled -}}
+{{- $embeddedRedis := and (eq $sessionMode "redis") .Values.redis.enabled -}}
+{{- $embeddedRedisTls := and $embeddedRedis $redisTls.enabled (include "convertigo.redisTlsSecretName" .) -}}
+{{- $redisPasswordFile := and $embeddedRedis (eq (include "convertigo.redisPasswordSource" .) "file") -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,7 +53,12 @@ spec:
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
+          {{- if $redisPasswordFile }}
+          {{- /* The password file can be written by a sidecar (Vault agent) after the container starts */}}
+          command: ["/bin/sh", "-c", "i=0; while [ ! -s \"$REDIS_PASSWORD_FILE\" ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; export JAVA_OPTS=\"$JAVA_OPTS -Dconvertigo.engine.session.redis.password=$(cat \"$REDIS_PASSWORD_FILE\")\"; /home/convertigo/scripts/installCarFiles.sh && exec /docker-entrypoint.sh convertigo"]
+          {{- else }}
           command: ["/bin/sh", "-c", "/home/convertigo/scripts/installCarFiles.sh && exec /docker-entrypoint.sh convertigo"]
+          {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -69,6 +76,9 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
+            {{- if $embeddedRedis }}
+            {{- include "convertigo.redisPasswordEnv" . | trim | nindent 12 }}
+            {{- end }}
             - name: JAVA_OPTS
               value: {{ include "convertigo.javaOpts" . | quote }}
             - name: JXMX
@@ -129,7 +139,13 @@ spec:
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+        {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       initContainers:
+        {{- with .Values.extraInitContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         - command:
           - 'sh'
           - '-c'

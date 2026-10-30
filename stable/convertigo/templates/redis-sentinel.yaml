@@ -1,0 +1,421 @@
+{{/*
+Scripts of the Redis Sentinel pods.
+*/}}
+{{- define "convertigo.redisSentinelScripts" }}
+common.sh: |
+  # Shared by the scripts below. Settings come from the container environment.
+  set -eu
+  HEADLESS="$HEADLESS_SERVICE.$POD_NAMESPACE.svc.$CLUSTER_DOMAIN"
+  SELF="$HOSTNAME.$HEADLESS"
+  PREFIX="${HOSTNAME%-*}"
+  ORDINAL="${HOSTNAME##*-}"
+
+  # Files written by a sidecar (Vault agent) can appear after the container starts.
+  wait_file() {
+    i=0
+    while [ ! -s "$1" ]; do
+      [ "$i" -ge 120 ] && { echo "Missing file $1" >&2; exit 1; }
+      i=$((i + 1)); sleep 1
+    done
+  }
+
+  if [ -n "${REDIS_PASSWORD_FILE:-}" ]; then
+    wait_file "$REDIS_PASSWORD_FILE"
+    REDIS_PASSWORD="$(cat "$REDIS_PASSWORD_FILE")"
+  fi
+  REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+  [ -z "$REDIS_PASSWORD" ] || export REDISCLI_AUTH="$REDIS_PASSWORD"
+
+  CLI="redis-cli"
+  if [ -n "${TLS_CERT:-}" ]; then
+    for f in "$TLS_CERT" "$TLS_KEY" "$TLS_CA"; do wait_file "$f"; done
+    CLI="redis-cli --tls --cert $TLS_CERT --key $TLS_KEY --cacert $TLS_CA"
+  fi
+
+  # Config line with a quoted value.
+  quoted() {
+    printf '%s "%s"\n' "$1" "$(printf '%s' "$2" | sed 's/[\\"]/\\&/g')"
+  }
+
+  # Current master host name, asked to the Sentinels of the other pods. Empty when none knows it.
+  find_master() {
+    i=0
+    while [ "$i" -lt "$REPLICAS" ]; do
+      host="$PREFIX-$i.$HEADLESS"
+      if [ "$host" != "$SELF" ]; then
+        addr="$(timeout 3 $CLI -h "$host" -p "$SENTINEL_PORT" sentinel get-master-addr-by-name "$MASTER_NAME" 2>/dev/null | head -1 || true)"
+        if printf '%s' "$addr" | grep -Eq '^[A-Za-z0-9.:-]+$'; then
+          echo "$addr"; return 0
+        fi
+      fi
+      i=$((i + 1))
+    done
+  }
+
+  role() {
+    timeout 3 $CLI -h localhost -p "$REDIS_PORT" role 2>/dev/null | head -1 || true
+  }
+
+redis.sh: |
+  . /scripts/common.sh
+  master="$(find_master)"
+  if [ "$master" = "$SELF" ] && [ ! -e /data/appendonlydir ]; then
+    # Restarted without data while still known as the master: let the Sentinels promote a replica
+    # rather than serve an empty data set that the replicas would copy.
+    n=0
+    while [ "$master" = "$SELF" ] && [ "$n" -lt 30 ]; do
+      sleep 2; master="$(find_master)"; n=$((n + 1))
+    done
+  fi
+  # First start: pod 0 is the master.
+  [ -n "$master" ] || [ "$ORDINAL" = 0 ] || master="$PREFIX-0.$HEADLESS"
+  conf=/tmp/redis.conf
+  umask 077
+  {
+    echo "dir /data"
+    echo "appendonly yes"
+    echo "appendfsync everysec"
+    echo "maxmemory-policy noeviction"
+    echo "replica-announce-ip $SELF"
+    if [ -n "${TLS_CERT:-}" ]; then
+      echo "port 0"
+      echo "tls-port $REDIS_PORT"
+      echo "tls-replication yes"
+      echo "tls-cert-file $TLS_CERT"
+      echo "tls-key-file $TLS_KEY"
+      echo "tls-ca-cert-file $TLS_CA"
+      echo "tls-auth-clients $TLS_AUTH_CLIENTS"
+    else
+      echo "port $REDIS_PORT"
+    fi
+    if [ -n "$REDIS_PASSWORD" ]; then
+      quoted requirepass "$REDIS_PASSWORD"
+      quoted masterauth "$REDIS_PASSWORD"
+    fi
+    if [ -n "$master" ] && [ "$master" != "$SELF" ]; then
+      echo "replicaof $master $REDIS_PORT"
+    fi
+  } > "$conf"
+  [ "$(id -u)" != 0 ] || chown redis "$conf"
+  echo "Starting Redis as $SELF, master: ${master:-self}"
+  cd /data
+  exec docker-entrypoint.sh redis-server "$conf"
+
+sentinel.sh: |
+  . /scripts/common.sh
+  master="$(find_master)"
+  [ -n "$master" ] || master="$PREFIX-0.$HEADLESS"
+  # Sentinel refuses a master host name that does not resolve yet.
+  i=0
+  until getent hosts "$master" > /dev/null || [ "$i" -ge 60 ]; do i=$((i + 1)); sleep 1; done
+  # Sentinel rewrites its configuration: it is kept in its own writable volume.
+  conf=/data/sentinel.conf
+  umask 077
+  {
+    if [ -n "${TLS_CERT:-}" ]; then
+      echo "port 0"
+      echo "tls-port $SENTINEL_PORT"
+      echo "tls-replication yes"
+      echo "tls-cert-file $TLS_CERT"
+      echo "tls-key-file $TLS_KEY"
+      echo "tls-ca-cert-file $TLS_CA"
+      echo "tls-auth-clients $TLS_AUTH_CLIENTS"
+    else
+      echo "port $SENTINEL_PORT"
+    fi
+    echo "sentinel resolve-hostnames yes"
+    echo "sentinel announce-hostnames yes"
+    echo "sentinel announce-ip $SELF"
+    echo "sentinel monitor $MASTER_NAME $master $REDIS_PORT $QUORUM"
+    echo "sentinel down-after-milliseconds $MASTER_NAME $DOWN_AFTER_MS"
+    echo "sentinel failover-timeout $MASTER_NAME $FAILOVER_TIMEOUT_MS"
+    echo "sentinel parallel-syncs $MASTER_NAME 1"
+    if [ -n "$REDIS_PASSWORD" ]; then
+      quoted "sentinel auth-pass $MASTER_NAME" "$REDIS_PASSWORD"
+      quoted requirepass "$REDIS_PASSWORD"
+    fi
+  } > "$conf"
+  echo "Starting Sentinel as $SELF, master: $master"
+  cd /data
+  exec docker-entrypoint.sh redis-server "$conf" --sentinel
+
+ping.sh: |
+  . /scripts/common.sh
+  timeout 3 $CLI -h localhost -p "$1" ping 2>/dev/null | grep -q PONG
+
+# Ready: the master, or a replica in sync with it. A rollout waits for the copy before stopping the next pod.
+redis-ready.sh: |
+  . /scripts/common.sh
+  case "$(role)" in
+    master) exit 0 ;;
+    slave) timeout 3 $CLI -h localhost -p "$REDIS_PORT" info replication 2>/dev/null | grep -q 'master_link_status:up' ;;
+    *) exit 1 ;;
+  esac
+
+# Ready: this Sentinel sees enough Sentinels to reach the quorum and authorize a failover.
+sentinel-ready.sh: |
+  . /scripts/common.sh
+  timeout 3 $CLI -h localhost -p "$SENTINEL_PORT" sentinel ckquorum "$MASTER_NAME" 2>/dev/null | grep -q '^OK'
+
+# Planned stop of the master (rollout, drain): promote a replica first. Sentinel refuses while no replica
+# is eligible yet (NOGOODSLAVE, INPROG): retry until the role changes.
+redis-stop.sh: |
+  . /scripts/common.sh
+  exec > /proc/1/fd/1 2>&1
+  n=0
+  while [ "$(role)" = master ] && [ "$n" -lt 50 ]; do
+    [ $((n % 10)) -ne 0 ] || echo "Stopping the master: failover $(timeout 3 $CLI -h localhost -p "$SENTINEL_PORT" sentinel failover "$MASTER_NAME" 2>&1)"
+    sleep 1; n=$((n + 1))
+  done
+  echo "Stopping Redis, role: $(role)"
+
+# The local Sentinel stays up while the local Redis is still the master.
+sentinel-stop.sh: |
+  . /scripts/common.sh
+  n=0
+  while [ "$(role)" = master ] && [ "$n" -lt 50 ]; do sleep 1; n=$((n + 1)); done
+{{- end }}
+{{- if include "convertigo.redisSentinel" . }}
+{{- $fullname := include "convertigo.fullname" . -}}
+{{- $sentinel := .Values.redis.sentinel -}}
+{{- $redisTls := default dict .Values.redis.tls -}}
+{{- $redisTlsMountPath := include "convertigo.redisTlsMountPath" . -}}
+{{- $redisTlsSecret := include "convertigo.redisTlsSecretName" . -}}
+{{- $redisPasswordSource := include "convertigo.redisPasswordSource" . -}}
+{{- $replicas := int $sentinel.replicas -}}
+{{- $quorum := int $sentinel.quorum -}}
+{{- if or (lt $quorum 1) (gt $quorum $replicas) -}}
+  {{- fail "redis.sentinel.quorum must be between 1 and redis.sentinel.replicas" -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-redis-scripts
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+data:
+  {{- include "convertigo.redisSentinelScripts" . | nindent 2 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-redis-headless
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  clusterIP: None
+  # Pods are reachable by name before being ready: replicas and Sentinels find each other at startup.
+  publishNotReadyAddresses: true
+  ports:
+    - name: redis
+      port: {{ .Values.redis.service.port }}
+      targetPort: redis
+    - name: sentinel
+      port: {{ $sentinel.port }}
+      targetPort: sentinel
+  selector:
+    app.kubernetes.io/name: {{ $fullname }}-redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $fullname }}-redis
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  replicas: {{ $replicas }}
+  serviceName: {{ $fullname }}-redis-headless
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $fullname }}-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $fullname }}-redis
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: redis
+      annotations:
+        checksum/scripts: {{ include "convertigo.redisSentinelScripts" . | sha256sum | trunc 16 }}
+        {{- with .Values.redis.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.redis.terminationGracePeriodSeconds }}
+      {{- with .Values.redis.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if .Values.redis.affinity }}
+        {{- toYaml .Values.redis.affinity | nindent 8 }}
+        {{- else }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: {{ $fullname }}-redis
+                    app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- end }}
+      {{- with .Values.redis.extraInitContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        {{- range $container := list "redis" "sentinel" }}
+        - name: {{ $container }}
+          image: "{{ $.Values.redis.image.repository }}:{{ $.Values.redis.image.tag }}"
+          imagePullPolicy: {{ $.Values.redis.image.pullPolicy }}
+          {{- with $.Values.redis.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command: ["sh", "/scripts/{{ $container }}.sh"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: HEADLESS_SERVICE
+              value: {{ $fullname }}-redis-headless
+            - name: CLUSTER_DOMAIN
+              value: {{ default "cluster.local" $sentinel.clusterDomain | quote }}
+            - name: REPLICAS
+              value: {{ $replicas | quote }}
+            - name: MASTER_NAME
+              value: {{ $sentinel.masterName | quote }}
+            - name: QUORUM
+              value: {{ $quorum | quote }}
+            - name: DOWN_AFTER_MS
+              value: {{ $sentinel.downAfterMilliseconds | quote }}
+            - name: FAILOVER_TIMEOUT_MS
+              value: {{ $sentinel.failoverTimeout | quote }}
+            - name: REDIS_PORT
+              value: {{ $.Values.redis.service.port | quote }}
+            - name: SENTINEL_PORT
+              value: {{ $sentinel.port | quote }}
+            {{- if $redisTls.enabled }}
+            - name: TLS_CERT
+              value: "{{ $redisTlsMountPath }}/{{ default "redis.crt" $redisTls.certKey }}"
+            - name: TLS_KEY
+              value: "{{ $redisTlsMountPath }}/{{ default "redis.key" $redisTls.keyKey }}"
+            - name: TLS_CA
+              value: "{{ $redisTlsMountPath }}/{{ default "ca.crt" $redisTls.caCertKey }}"
+            - name: TLS_AUTH_CLIENTS
+              value: {{ ternary "yes" "no" $redisTls.authClients | quote }}
+            {{- end }}
+            {{- if $redisPasswordSource }}
+            {{- include "convertigo.redisPasswordEnv" $ | trim | nindent 12 }}
+            {{- end }}
+          ports:
+            {{- if eq $container "redis" }}
+            - name: redis
+              containerPort: {{ $.Values.redis.service.port }}
+            {{- else }}
+            - name: sentinel
+              containerPort: {{ $sentinel.port }}
+            {{- end }}
+          readinessProbe:
+            exec:
+              command: ["sh", "/scripts/{{ $container }}-ready.sh"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "/scripts/ping.sh", "{{ ternary $.Values.redis.service.port $sentinel.port (eq $container "redis") }}"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "/scripts/{{ $container }}-stop.sh"]
+          resources:
+            {{- toYaml (ternary $.Values.redis.resources $sentinel.resources (eq $container "redis")) | nindent 12 }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: {{ ternary "redis-data" "sentinel-data" (eq $container "redis") }}
+              mountPath: /data
+            {{- if and $redisTls.enabled $redisTlsSecret }}
+            - name: redis-tls
+              mountPath: {{ $redisTlsMountPath }}
+              readOnly: true
+            {{- end }}
+            {{- with $.Values.redis.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- end }}
+        {{- with .Values.redis.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ $fullname }}-redis-scripts
+        - name: sentinel-data
+          emptyDir: {}
+        {{- if not .Values.redis.persistence.enabled }}
+        - name: redis-data
+          emptyDir: {}
+        {{- end }}
+        {{- if and $redisTls.enabled $redisTlsSecret }}
+        - name: redis-tls
+          secret:
+            secretName: {{ $redisTlsSecret }}
+        {{- end }}
+        {{- with .Values.redis.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.redis.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ .Values.redis.persistence.storageClass | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.persistence.size }}
+  {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}-redis
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  # Voluntary disruptions (drain, cluster upgrade) keep a quorum of pods.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $fullname }}-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: redis
+{{- end }}

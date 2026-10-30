@@ -168,11 +168,59 @@ auto -> redis when redis.enabled=true, otherwise tomcat.
 {{- end }}
 
 {{/*
-Resolve embedded Redis TLS secret name.
+Resolve embedded Redis TLS secret name. Empty: the files are provided at the mount path by user volumes.
 */}}
 {{- define "convertigo.redisTlsSecretName" -}}
 {{- $redisTls := default dict .Values.redis.tls -}}
-{{- required "redis.tls.existingSecret must be set when redis.tls.enabled=true" $redisTls.existingSecret -}}
+{{- default "" $redisTls.existingSecret -}}
+{{- end }}
+
+{{/*
+Source of the embedded Redis password: file, secret, value, or empty when Redis AUTH is disabled.
+*/}}
+{{- define "convertigo.redisPasswordSource" -}}
+{{- $auth := default dict .Values.redis.auth -}}
+{{- if $auth.enabled -}}
+  {{- if $auth.passwordFile -}}file
+  {{- else if $auth.existingSecret -}}secret
+  {{- else if $auth.password -}}value
+  {{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Environment variables giving the embedded Redis password to a container (REDIS_PASSWORD or REDIS_PASSWORD_FILE).
+*/}}
+{{- define "convertigo.redisPasswordEnv" -}}
+{{- $source := include "convertigo.redisPasswordSource" . -}}
+{{- if eq $source "file" }}
+- name: REDIS_PASSWORD_FILE
+  value: {{ .Values.redis.auth.passwordFile | quote }}
+{{- else if eq $source "secret" }}
+- name: REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.redis.auth.existingSecret }}
+      key: {{ default "redis-password" .Values.redis.auth.existingSecretPasswordKey }}
+{{- else if eq $source "value" }}
+- name: REDIS_PASSWORD
+  value: {{ .Values.redis.auth.password | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
+True when the embedded Redis runs with Sentinel.
+*/}}
+{{- define "convertigo.redisSentinel" -}}
+{{- $sentinel := default dict .Values.redis.sentinel -}}
+{{- if and .Values.redis.enabled $sentinel.enabled (eq (include "convertigo.sessionStoreMode" .) "redis") -}}true{{- end -}}
+{{- end }}
+
+{{/*
+Host names of the embedded Redis Sentinel pods, and of their headless service.
+*/}}
+{{- define "convertigo.redisHeadlessHost" -}}
+{{- printf "%s-redis-headless.%s.svc.%s" (include "convertigo.fullname" .) .Release.Namespace (default "cluster.local" .Values.redis.sentinel.clusterDomain) -}}
 {{- end }}
 
 {{/*
@@ -209,12 +257,26 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- $redisTopology := default "single" $sessionRedis.topology -}}
 {{- $sentinel := default dict $sessionRedis.sentinel -}}
 {{- $sentinelNodes := list -}}
+{{- $embeddedSentinel := include "convertigo.redisSentinel" $ctx -}}
 {{- if not (has $redisTopology (list "single" "sentinel")) -}}
   {{- fail "sessionStore.redis.topology must be single or sentinel" -}}
 {{- end -}}
-{{- if eq $redisTopology "sentinel" -}}
+{{- if $embeddedSentinel -}}
+  {{- $redisTopology = "sentinel" -}}
+  {{- $sentinel = dict "master" $ctx.Values.redis.sentinel.masterName -}}
+  {{- if not (regexMatch "^[a-zA-Z0-9_.-]+$" (toString $sentinel.master)) -}}
+    {{- fail "redis.sentinel.masterName must contain only letters, digits, dots, underscores or hyphens" -}}
+  {{- end -}}
+  {{- $replicas := int $ctx.Values.redis.sentinel.replicas -}}
+  {{- if lt $replicas 3 -}}
+    {{- fail "redis.sentinel.replicas must be at least 3" -}}
+  {{- end -}}
+  {{- range $i := until $replicas -}}
+    {{- $sentinelNodes = append $sentinelNodes (printf "%s-redis-%d.%s:%v" (include "convertigo.fullname" $ctx) $i (include "convertigo.redisHeadlessHost" $ctx) $ctx.Values.redis.sentinel.port) -}}
+  {{- end -}}
+{{- else if eq $redisTopology "sentinel" -}}
   {{- if or $ctx.Values.redis.enabled (ne $sessionMode "redis") -}}
-    {{- fail "Sentinel requires sessionStore.mode=redis and redis.enabled=false; deploy Redis/Sentinel with a dedicated chart" -}}
+    {{- fail "Sentinel requires sessionStore.mode=redis, and either redis.enabled=true with redis.sentinel.enabled=true, or redis.enabled=false with an external Redis/Sentinel" -}}
   {{- end -}}
   {{- if or (not (trim (toString (default "" $sentinel.master)))) (not $sentinel.nodes) -}}
     {{- fail "Sentinel requires sessionStore.redis.sentinel.master and sessionStore.redis.sentinel.nodes" -}}
@@ -269,11 +331,17 @@ Compose JAVA_OPTS for the main Convertigo container.
     {{- end }}
   {{- end }}
   {{- if $ctx.Values.redis.enabled }}
-    {{- $redisHost := printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
-    {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.redis.service.port) }}
-    {{- if and $ctx.Values.redis.auth.enabled $ctx.Values.redis.auth.password }}
+    {{- if not $embeddedSentinel }}
+      {{- $redisHost := printf "%s-redis" (include "convertigo.fullname" $ctx) -}}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.host=%s" $redisHost) }}
+      {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.port=%v" $ctx.Values.redis.service.port) }}
+    {{- end }}
+    {{- $passwordSource := include "convertigo.redisPasswordSource" $ctx -}}
+    {{- if eq $passwordSource "value" }}
       {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.redis.auth.password) }}
+    {{- else if eq $passwordSource "secret" }}
+      {{- /* Expanded by Kubernetes from the REDIS_PASSWORD variable declared before JAVA_OPTS */}}
+      {{- $opts = append $opts "-Dconvertigo.engine.session.redis.password=$(REDIS_PASSWORD)" }}
     {{- end }}
   {{- else }}
     {{- with $sessionRedis.host }}

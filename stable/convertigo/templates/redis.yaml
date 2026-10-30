@@ -1,8 +1,9 @@
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
-{{- $redisPassword := .Values.redis.auth.password -}}
+{{- $redisPasswordSource := include "convertigo.redisPasswordSource" . -}}
 {{- $redisTls := default dict .Values.redis.tls -}}
 {{- $redisTlsMountPath := include "convertigo.redisTlsMountPath" . -}}
-{{- if and (eq $sessionMode "redis") .Values.redis.enabled }}
+{{- $redisTlsSecret := include "convertigo.redisTlsSecretName" . -}}
+{{- if and (eq $sessionMode "redis") .Values.redis.enabled (not (include "convertigo.redisSentinel" .)) }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -50,12 +51,51 @@ spec:
         app.kubernetes.io/component: redis
         app.kubernetes.io/managed-by: {{ .Release.Service }}
         helm.sh/chart: {{ include "convertigo.chart" . }}
+      {{- with .Values.redis.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.extraInitContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: redis
           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          {{- with .Values.redis.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if $redisPasswordSource }}
+          env:
+            {{- include "convertigo.redisPasswordEnv" . | trim | nindent 12 }}
+          {{- end }}
+          {{- if eq $redisPasswordSource "file" }}
+          {{- /* The password file can be written by a sidecar (Vault agent) after the container starts */}}
+          command: ["sh", "-c", "i=0; while [ ! -s \"$REDIS_PASSWORD_FILE\" ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; exec docker-entrypoint.sh \"$@\" --requirepass \"$(cat \"$REDIS_PASSWORD_FILE\")\"", "redis"]
+          {{- end }}
           args:
+            {{- if eq $redisPasswordSource "file" }}
+            - redis-server
+            {{- end }}
             - "--save"
             - "60"
             - "1"
@@ -75,9 +115,9 @@ spec:
             - "--tls-auth-clients"
             - {{ ternary "yes" "no" $redisTls.authClients | quote }}
           {{- end }}
-          {{- if and .Values.redis.auth.enabled $redisPassword }}
+          {{- if has $redisPasswordSource (list "value" "secret") }}
             - "--requirepass"
-            - "{{ $redisPassword }}"
+            - "$(REDIS_PASSWORD)"
           {{- end }}
           ports:
             - name: redis
@@ -87,11 +127,17 @@ spec:
           volumeMounts:
             - name: redis-data
               mountPath: /data
-          {{- if $redisTls.enabled }}
+          {{- if and $redisTls.enabled $redisTlsSecret }}
             - name: redis-tls
               mountPath: {{ $redisTlsMountPath }}
               readOnly: true
           {{- end }}
+          {{- with .Values.redis.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- with .Values.redis.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       volumes:
         - name: redis-data
           {{- if .Values.redis.persistence.enabled }}
@@ -100,10 +146,13 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-        {{- if $redisTls.enabled }}
+        {{- if and $redisTls.enabled $redisTlsSecret }}
         - name: redis-tls
           secret:
-            secretName: {{ include "convertigo.redisTlsSecretName" . }}
+            secretName: {{ $redisTlsSecret }}
+        {{- end }}
+        {{- with .Values.redis.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
 
 {{- if .Values.redis.persistence.enabled }}

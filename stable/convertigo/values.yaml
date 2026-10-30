@@ -129,6 +129,9 @@ affinity: {}
 additionalJavaOpts: []
 extraVolumes: []
 extraVolumeMounts: []
+# Additional containers of the Convertigo pod, for example a Vault agent writing secrets to a shared volume.
+extraInitContainers: []
+extraContainers: []
 
 # ====== Session store (sticky or stateless) ================================================================
 sessionStore:
@@ -192,6 +195,12 @@ redis:
   auth:
     enabled: true
     password: ChangeMe!
+    # Existing secret holding the password, used instead of password.
+    existingSecret: ""
+    existingSecretPasswordKey: redis-password
+    # File holding the password, used instead of password and existingSecret. The file must be provided in the
+    # Redis pods (redis.extraVolumes) and in the Convertigo pods (extraVolumes), for example by a Vault agent.
+    passwordFile: ""
   tls:
     # Disabled by default. When enabled, Redis listens on TLS only.
     enabled: false
@@ -199,6 +208,8 @@ redis:
     authClients: true
     # Existing secret mounted in both Redis and Convertigo pods.
     # Expected default keys: ca.crt, redis.crt, redis.key, truststore.p12, client.p12.
+    # Empty: no secret is mounted, the files must be provided at mountPath by your own volumes
+    # (redis.extraVolumes for Redis, extraVolumes for Convertigo), for example by a Vault agent.
     existingSecret: ""
     mountPath: /etc/convertigo/redis-tls
     caCertKey: ca.crt
@@ -226,6 +237,36 @@ redis:
     # requests:
     #   cpu: 150m
     #   memory: 256Mi
+  sentinel:
+    # Convertigo 8.4.7+. Highly available Redis: a StatefulSet of replicas pods, each running Redis and Sentinel
+    # (same image), 1 master and replicas - 1 replicas. Sentinel promotes a replica when the master fails and
+    # Convertigo follows it. false: a single Redis pod.
+    enabled: false
+    replicas: 3
+    masterName: convertigo
+    quorum: 2
+    port: 26379
+    # Time before an unreachable master is declared down, then the failover runs.
+    downAfterMilliseconds: 5000
+    failoverTimeout: 30000
+    # Pods and Sentinels are advertised by host name: <release>-convertigo-redis-N.<release>-convertigo-redis-headless.<namespace>.svc.<clusterDomain>
+    clusterDomain: cluster.local
+    resources: {}
+  # Pod settings for the Redis pods (single or Sentinel).
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  # Sentinel only. Empty: pods preferably spread on different nodes.
+  affinity: {}
+  # Sentinel only. A planned stop of the master waits for the promotion of a replica.
+  terminationGracePeriodSeconds: 60
+  # Mounted in the Redis (and Sentinel) containers, for example a volume shared with a Vault agent.
+  extraVolumes: []
+  extraVolumeMounts: []
+  extraInitContainers: []
+  extraContainers: []
 
 # ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
 workspace:

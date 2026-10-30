@@ -241,9 +241,10 @@ readinessProbe:
   # If exec.command is provided, the template will use exec to validate readiness (allows checking response body).
   # Otherwise httpGet will be used.
   exec:
-    # Ready when the engine is started and, in Redis mode (Convertigo 8.4.7+), its session store is usable.
-    # Older images do not report convertigo.session.store: only convertigo.started is checked for them.
-    command: ["sh", "-c", "s=$(curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.session.store=KO'"]
+    # Ready when the engine is started, the projects of its workspace are loaded and, in Redis mode, its session
+    # store is usable (Convertigo 8.4.7+). Older images do not report convertigo.projects nor convertigo.session.store:
+    # only convertigo.started is checked for them.
+    command: ["sh", "-c", "s=$(curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.session.store=KO' && ! echo \"$s\" | grep -q 'convertigo.projects=KO'"]
   httpGet:
     path: /convertigo/admin/services/engine.Supervision
     port: http

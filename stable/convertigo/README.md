@@ -37,6 +37,7 @@ Find below the values.yaml customization options :
 | extraVolumes                      | []                     | Extra volumes mounted on the Convertigo pod, for example Redis TLS secrets. |
 | extraVolumeMounts                 | []                     | Extra volume mounts for the Convertigo container. |
 | extraContainers / extraInitContainers | []                 | Additional containers of the Convertigo pod, for example a Vault agent writing secrets to a shared volume. |
+| workspaceOwnershipInit.enabled     | true                   | Run the built-in root init container that prepares `/workspace` ownership. Disable when the runtime UID can already write the volume, for example with supported `fsGroup` permissions. Does not disable `extraInitContainers`. See [Non-root deployments](#non-root-deployments). |
 | sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
 | sessionStore.redis.*              |                        | Optional Redis client settings used when `sessionStore.mode=redis` and `redis.enabled=false`. |
 | sessionStore.redis.topology       | single                 | `single` or `sentinel`. Sentinel requires Convertigo 8.4.7+ and an external Redis/Sentinel deployment. |
@@ -114,6 +115,53 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
 | baserow.resources                     | {}                 | Resources restriction for baserow. |
+
+## Non-root deployments
+
+`workspaceOwnershipInit.enabled` defaults to `true` to preserve existing installations.
+Set it to `false` to omit the built-in `volume-mount-hack` init container, which always
+runs as UID 0, even when `podSecurityContext.runAsUser` selects a non-root UID for
+Convertigo. User-provided `extraInitContainers` are preserved.
+
+To disable it in a values file:
+
+```yaml
+workspaceOwnershipInit:
+  enabled: false
+```
+
+The setting can also be supplied as `--set workspaceOwnershipInit.enabled=false`.
+When upgrading with `--reuse-values`, an absent setting keeps the built-in init
+container enabled, as in the previous chart; explicitly set it to `false` to opt out.
+
+Before disabling it, ensure that the runtime UID can write the workspace, including
+existing `projects` and `configuration` contents. This can be provided by the volume's
+existing permissions or by `podSecurityContext.fsGroup` when supported by the storage
+driver. `fsGroup` changes group access; it does not make an arbitrary UID the owner.
+When started as root, the image entrypoint also adjusts `/workspace` ownership, but
+this does not replace the non-root permission requirements of a restricted cluster.
+
+The project installation script works with the running non-root UID and preserves
+file ownership. It only uses `chown` when started as root, before the image switches
+to the `convertigo` user. Keep appropriate group permissions on reused workspaces;
+disabling the init container cannot repair an inaccessible volume.
+
+For OpenShift, use the UID/group permissions allowed by the namespace's SCC rather
+than assuming a fixed UID such as 1000. A server process already running as non-root
+does not imply that its init containers were admitted under a restricted SCC.
+
+This option alone does not make the full chart Pod Security Restricted compliant.
+Also configure `runAsNonRoot`, `allowPrivilegeEscalation: false`, capabilities and
+seccomp as required by the cluster. Check every deployed service and extra container:
+the bundled databases may require different users and volume permissions. A read-only
+root filesystem is a separate setting that also requires writable mounts for the
+files modified at startup; it is not enabled by this option.
+
+For maintainers, run `python3 tests/workspace-ownership.py` from the repository root
+to check the rendered init containers. Add `--docker` to exercise the rendered
+installation script with fresh and reused workspaces, UID 1000, arbitrary UIDs,
+supplemental group permissions and root. These isolated Docker tests use a small
+local project archive and do not validate OpenShift admission or storage drivers.
 
 ## External CouchDB example
 

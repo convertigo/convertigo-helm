@@ -142,10 +142,12 @@ spec:
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- if or .Values.workspaceOwnershipInit.enabled .Values.extraInitContainers }}
       initContainers:
         {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if .Values.workspaceOwnershipInit.enabled }}
         - command:
           - 'sh'
           - '-c'
@@ -160,6 +162,8 @@ spec:
           volumeMounts:
               - name: c8o-workspace
                 mountPath: /workspace
+        {{- end }}
+      {{- end }}
       
       {{- with .Values.nodeSelector }}
       nodeSelector:

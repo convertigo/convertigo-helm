@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/convertigo/baserow-plugin-c8oforms",
+  "release": "v0.3.1",
+  "commit": "60d93e4105ee2ea7704ecde1d042daa01affde73",
+  "archive": "c8oforms-0.3.1.tar.gz",
+  "sha256": "9fa1fdd8330abb880eeb283478c65cfbae742c8f3a10cb1ffce3473abbb182ec",
+  "tested_baserow_versions": ["1.34.5", "2.4.1"]
+}

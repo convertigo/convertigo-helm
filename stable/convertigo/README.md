@@ -115,6 +115,57 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
 | baserow.resources                     | {}                 | Resources restriction for baserow. |
+| baserow.plugins.c8oforms.enabled      | false              | Install the C8oForms plugin (0.3.1, pinned) in Baserow. Requires `baserow.image.tag` 1.34.5 or 2.4.1. See [C8oForms plugin of Baserow](#c8oforms-plugin-of-baserow). |
+| baserow.plugins.c8oforms.existingConfigMap |               | Existing ConfigMap holding `c8oforms-0.3.1.tar.gz`, used instead of the archive embedded in the chart. |
+
+## C8oForms plugin of Baserow
+
+The C8oForms plugin adds the server side helpers of No Code Studio to Baserow, under
+`/api/c8o/` on its backend: group by and aggregations computed in SQL on the whole table
+(instead of the first rows read by the client), and two performance backports of Baserow 2.3
+for older versions. It has no frontend part, and adds no table nor migration.
+
+It is installed as on the Convertigo cloud: the official Baserow image installs, at each start,
+the archive given by `BASEROW_PLUGIN_URLS`, here a `file://` path mounted from a ConfigMap.
+The chart pins the version: `files/baserow-plugins/c8oforms-0.3.1.tar.gz`, the archive of the
+[v0.3.1 release](https://github.com/convertigo/baserow-plugin-c8oforms/releases/tag/v0.3.1),
+locked by its commit and sha256 in `files/baserow-plugins/c8oforms.json`: Baserow does not download it.
+
+The plugin is tested on Baserow **1.34.5** and **2.4.1** only, and the chart refuses another
+`baserow.image.tag`, including its 1.30.1 default. Upgrading Baserow migrates its database:
+back up the Baserow database first, as there is no way back to the previous version.
+
+```yaml
+baserow:
+  image:
+    tag: 1.34.5
+  plugins:
+    c8oforms:
+      enabled: true
+```
+
+- The archive is in an immutable ConfigMap named after its sha256 and mounted read-only at
+  `/c8o-plugins`. A new version of the plugin comes with a new chart, a new ConfigMap, and restarts Baserow.
+- The all-in-one image keeps the plugins it installs in `/baserow/data/plugins`, on the Baserow
+  volume, and reinstalls them at each start. With the plugin enabled, an `emptyDir` is mounted
+  there, so the mounted archive is the only source: setting `enabled: false` removes the plugin
+  at the next start, and an upgrade does not keep the previous version. Other plugins installed
+  by hand in that directory are not loaded while the C8oForms plugin is enabled.
+- Each feature can be turned off on its own: see the
+  [plugin documentation](https://github.com/convertigo/baserow-plugin-c8oforms#readme).
+- At each start, Baserow installs the plugin with `pip`; the plugin has no Python dependency.
+  The log then says `Loaded backend plugins: c8oforms`. If the archive is missing or invalid,
+  Baserow does not start. Without Internet access, check this start on your cluster before production.
+- To provide the archive yourself (for example from your own artifact repository), create a
+  ConfigMap holding it under the key `c8oforms-0.3.1.tar.gz` and set
+  `baserow.plugins.c8oforms.existingConfigMap`. Changing the content of that ConfigMap needs a
+  restart of Baserow: prefer a new ConfigMap name.
+
+For maintainers, run `python3 tests/baserow-plugin.py` from the repository root to check the
+rendering: disabled by default, enabled on each tested Baserow version, existing ConfigMap,
+untested Baserow and altered archive refused. To update the plugin, replace the archive by the
+one of the new release, update `c8oforms.json` (release, commit, sha256, tested Baserow
+versions) and the archive name in `values.yaml` and this README.
 
 ## Non-root deployments
 

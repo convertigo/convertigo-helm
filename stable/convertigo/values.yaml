@@ -351,6 +351,16 @@ baserow:
   baserow_user: baserow
   baserow_password: N0Passworw0rd
   baserow_public_url: ""
+  plugins:
+    # C8oForms plugin of Baserow (backend only): whole-table SQL aggregations under /api/c8o/ for No Code Studio,
+    # and performance backports. Installed at each start of Baserow from BASEROW_PLUGIN_URLS, a file:// archive
+    # mounted from a ConfigMap, as on the Convertigo cloud. Pinned by the chart: c8oforms 0.3.1, embedded in
+    # files/baserow-plugins (nothing is downloaded). Requires a tested Baserow image tag, 1.34.5 or 2.4.1, not the
+    # 1.30.1 default: an upgrade of Baserow migrates its database. See the README, "C8oForms plugin of Baserow".
+    c8oforms:
+      enabled: false
+      # Existing ConfigMap holding the archive under the key c8oforms-0.3.1.tar.gz, used instead of the embedded one.
+      existingConfigMap: ""
   persistentVolume:
     # adapt the storage class to your environment
     storageClass: ebs-sc

@@ -1,0 +1,22 @@
+{{- if .Values.baserow.enabled }}
+{{- $c8oforms := include "convertigo.baserowC8oforms" . | fromJson }}
+{{- if and $c8oforms.enabled $c8oforms.create }}
+# Archive of the C8oForms plugin embedded in the chart, mounted in the Baserow container. Named after its sha256 and
+# immutable: another version is another ConfigMap, and its new name restarts Baserow.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $c8oforms.configMap }}
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: baserow
+  annotations:
+    c8oforms.convertigo.net/source: {{ $c8oforms.repository | quote }}
+    c8oforms.convertigo.net/release: {{ $c8oforms.release | quote }}
+    c8oforms.convertigo.net/commit: {{ $c8oforms.commit | quote }}
+    c8oforms.convertigo.net/sha256: {{ $c8oforms.sha256 | quote }}
+immutable: true
+binaryData:
+  {{ $c8oforms.archive }}: {{ .Files.Get $c8oforms.path | b64enc }}
+{{- end }}
+{{- end }}

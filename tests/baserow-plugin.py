@@ -34,7 +34,7 @@ def documents(rendered):
 
 def plugin_objects(rendered):
     return [d for d in rendered.split('\n---\n') if 'c8oforms-plugin' in d or 'BASEROW_PLUGIN_URLS' in d
-            or 'c8oforms.convertigo.net' in d]
+            or 'PIP_NO_BUILD_ISOLATION' in d or 'c8oforms.convertigo.net' in d]
 
 
 subprocess.check_call(['helm', 'lint', str(chart)], stdout=subprocess.DEVNULL)
@@ -43,6 +43,10 @@ enabled = ('--set', 'baserow.plugins.c8oforms.enabled=true')
 # Disabled by default, and the same rendering as before the key existed (--reuse-values)
 default = render()
 assert not plugin_objects(default)
+# The default Baserow image is one the plugin is tested on
+assert 'image: baserow/baserow:1.34.5' in documents(default)['templates/BRdeployment.yaml']
+assert '1.34.5' in lock['tested_baserow_versions']
+assert 'templates/BRconfigmapC8oforms.yaml' in documents(render(*enabled))
 assert render('--set', 'baserow.plugins.c8oforms.enabled=false') == default
 assert render('--set', 'baserow.plugins=null') == default
 assert not plugin_objects(render(*enabled, '--set', 'baserow.enabled=false'))
@@ -52,6 +56,8 @@ for tag in lock['tested_baserow_versions']:
     deployment = docs['templates/BRdeployment.yaml']
     assert 'image: baserow/baserow:' + tag in deployment
     assert '- name: BASEROW_PLUGIN_URLS\n              value: "%s"' % url in deployment
+    # Offline install: pip builds the plugin with the setuptools of the image (inverted variable)
+    assert '- name: PIP_NO_BUILD_ISOLATION\n              value: "false"' in deployment
     assert '- name: c8oforms-plugin\n          configMap:\n            name: %s' % config_map in deployment
     assert '- name: c8oforms-plugin\n              mountPath: /c8o-plugins\n              readOnly: true' in deployment
     assert '- name: br-plugins\n          emptyDir: {}' in deployment
@@ -62,8 +68,8 @@ for tag in lock['tested_baserow_versions']:
     data = re.search(r'^  %s: (\S+)$' % re.escape(lock['archive']), cm, re.M).group(1)
     assert base64.b64decode(data) == archive
 
-# Untested Baserow (the 1.30.1 default of the chart)
-assert 'tested on Baserow' in failure(*enabled)
+# Untested Baserow (the default of the chart before 1.34.5)
+assert 'tested on Baserow' in failure(*enabled, '--set', 'baserow.image.tag=1.30.1')
 
 # Archive from an existing ConfigMap: the chart creates none
 docs = documents(render(*enabled, '--set', 'baserow.image.tag=1.34.5',

@@ -106,7 +106,7 @@ Find below the values.yaml customization options :
 | couchdb.resources                 | {}                     | Resources restriction for couchdb. |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
 | baserow.image.repository          | baserow/baserow        | Baserow image repository. Customize if using another repository. |
-| baserow.image.tag                 | 1.30.1                 | Baserow image tag. Customize if using a specific version. |
+| baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
 | baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
@@ -115,8 +115,29 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
 | baserow.resources                     | {}                 | Resources restriction for baserow. |
-| baserow.plugins.c8oforms.enabled      | false              | Install the C8oForms plugin (0.3.1, pinned) in Baserow. Requires `baserow.image.tag` 1.34.5 or 2.4.1. See [C8oForms plugin of Baserow](#c8oforms-plugin-of-baserow). |
+| baserow.plugins.c8oforms.enabled      | false              | Install the C8oForms plugin (0.3.1, pinned) in Baserow. Requires `baserow.image.tag` 1.34.5 (the default) or 2.4.1. See [C8oForms plugin of Baserow](#c8oforms-plugin-of-baserow). |
 | baserow.plugins.c8oforms.existingConfigMap |               | Existing ConfigMap holding `c8oforms-0.3.1.tar.gz`, used instead of the archive embedded in the chart. |
+
+## Baserow 1.34.5
+
+The chart deploys Baserow 1.34.5, the version of the Convertigo cloud, instead of 1.30.1. To
+postpone the upgrade, keep `baserow.image.tag: 1.30.1` in your values.
+
+- At its first start, Baserow 1.34.5 migrates its database (about 80 migrations from 1.30.1, a
+  few seconds on a small database, longer on a big one). There is no way back to 1.30.1: back up
+  the Baserow database first, for example with `pg_dump` in the TimescaleDB pod.
+- The users, tokens, workspaces and rows are kept: the Baserow volume keeps its secret keys.
+- From 1.34.0, the full-text search data is kept in one table per workspace instead of one column
+  per field. Baserow rebuilds it in the background after the upgrade.
+- REST API changes that can matter to API clients: a page after the last one returns an empty
+  list instead of the error `ERROR_INVALID_PAGE` (1.33.0); a request that fails on a database
+  deadlock returns HTTP 409 instead of 503 (1.33.3); the integration endpoint no longer returns
+  the fields of the tables (1.32.4); views return a limited number of linked items by default
+  (1.34.0). The `link_row_has` filter keeps its name, only its label became "has any of".
+- PostgreSQL 11 is no longer supported (1.31.0): the TimescaleDB of the chart runs PostgreSQL 16.
+- The chart widget of Baserow dashboards became a premium feature (1.33.0).
+- No environment variable to add or rename. The memory used by the Baserow container is about
+  the same (1.4 to 1.8 GiB in our tests).
 
 ## C8oForms plugin of Baserow
 
@@ -132,13 +153,10 @@ The chart pins the version: `files/baserow-plugins/c8oforms-0.3.1.tar.gz`, the a
 locked by its commit and sha256 in `files/baserow-plugins/c8oforms.json`: Baserow does not download it.
 
 The plugin is tested on Baserow **1.34.5** and **2.4.1** only, and the chart refuses another
-`baserow.image.tag`, including its 1.30.1 default. Upgrading Baserow migrates its database:
-back up the Baserow database first, as there is no way back to the previous version.
+`baserow.image.tag` (1.30.1, for example).
 
 ```yaml
 baserow:
-  image:
-    tag: 1.34.5
   plugins:
     c8oforms:
       enabled: true
@@ -155,7 +173,10 @@ baserow:
   [plugin documentation](https://github.com/convertigo/baserow-plugin-c8oforms#readme).
 - At each start, Baserow installs the plugin with `pip`; the plugin has no Python dependency.
   The log then says `Loaded backend plugins: c8oforms`. If the archive is missing or invalid,
-  Baserow does not start. Without Internet access, check this start on your cluster before production.
+  Baserow does not start.
+- It installs without Internet access: the chart sets `PIP_NO_BUILD_ISOLATION=false` (pip reads
+  this variable inverted), so that pip builds the plugin with the setuptools of the image
+  instead of downloading them from PyPI, which would stop Baserow on a cluster without Internet.
 - To provide the archive yourself (for example from your own artifact repository), create a
   ConfigMap holding it under the key `c8oforms-0.3.1.tar.gz` and set
   `baserow.plugins.c8oforms.existingConfigMap`. Changing the content of that ConfigMap needs a

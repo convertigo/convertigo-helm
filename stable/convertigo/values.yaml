@@ -346,7 +346,9 @@ baserow:
   enabled: true
   image:
     repository: baserow/baserow
-    tag: 1.30.1
+    # Upgrading from an earlier version migrates the Baserow database at the first start, with no way back:
+    # back it up first. See the README, "Baserow 1.34.5".
+    tag: 1.34.5
   baserow_db : baserow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
@@ -355,8 +357,8 @@ baserow:
     # C8oForms plugin of Baserow (backend only): whole-table SQL aggregations under /api/c8o/ for No Code Studio,
     # and performance backports. Installed at each start of Baserow from BASEROW_PLUGIN_URLS, a file:// archive
     # mounted from a ConfigMap, as on the Convertigo cloud. Pinned by the chart: c8oforms 0.3.1, embedded in
-    # files/baserow-plugins (nothing is downloaded). Requires a tested Baserow image tag, 1.34.5 or 2.4.1, not the
-    # 1.30.1 default: an upgrade of Baserow migrates its database. See the README, "C8oForms plugin of Baserow".
+    # files/baserow-plugins; it installs without Internet access. Requires a Baserow image tag the plugin is tested
+    # on: 1.34.5 (the default) or 2.4.1. See the README, "C8oForms plugin of Baserow".
     c8oforms:
       enabled: false
       # Existing ConfigMap holding the archive under the key c8oforms-0.3.1.tar.gz, used instead of the embedded one.

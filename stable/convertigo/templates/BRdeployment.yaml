@@ -73,6 +73,11 @@ spec:
             # Next to the mount: a container with the variable and without the file does not start.
             - name: BASEROW_PLUGIN_URLS
               value: {{ printf "file:///c8o-plugins/%s" $c8oforms.archive | quote }}
+            # The image installs the plugin with pip, by default in an isolated build environment that downloads
+            # setuptools from PyPI: without Internet access, Baserow would not start. "false" (sic, pip inverts
+            # this variable) builds it with the setuptools of the image instead, offline.
+            - name: PIP_NO_BUILD_ISOLATION
+              value: "false"
             {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

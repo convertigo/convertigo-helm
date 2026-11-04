@@ -126,6 +126,10 @@ postpone the upgrade, keep `baserow.image.tag: 1.30.1` in your values.
 - At its first start, Baserow 1.34.5 migrates its database (about 80 migrations from 1.30.1, a
   few seconds on a small database, longer on a big one). There is no way back to 1.30.1: back up
   the Baserow database first, for example with `pg_dump` in the TimescaleDB pod.
+- The Baserow Deployment uses `Recreate`: the old instance stops before the new one starts,
+  so two versions cannot share the all-in-one image's Redis files or serve requests during
+  each other's startup migrations. Plan downtime for the upgrade. A Helm rollback does not
+  reverse the database migrations; recovery requires matching database and Baserow volume backups.
 - The users, tokens, workspaces and rows are kept: the Baserow volume keeps its secret keys.
 - From 1.34.0, the full-text search data is kept in one table per workspace instead of one column
   per field. Baserow rebuilds it in the background after the upgrade.
@@ -187,6 +191,13 @@ rendering: disabled by default, enabled on each tested Baserow version, existing
 untested Baserow and altered archive refused. To update the plugin, replace the archive by the
 one of the new release, update `c8oforms.json` (release, commit, sha256, tested Baserow
 versions) and the archive name in `values.yaml` and this README.
+
+To exercise the upgrade without Kubernetes, first pull `baserow/baserow:1.30.1`,
+`baserow/baserow:1.34.5` and `timescale/timescaledb:latest-pg16`, then run
+`python3 tests/baserow-upgrade.py`. It uses an internal Docker network, the chart's rendered
+startup command and plugin archive, and disposable credentials. It verifies linked rows,
+formulas, token continuity, migrations, aggregations, restart and plugin removal. Containers
+are stopped at the end; test data under `.tmp/` and Docker resources are retained.
 
 ## Non-root deployments
 

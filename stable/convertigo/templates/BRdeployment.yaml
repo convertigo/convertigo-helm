@@ -8,6 +8,10 @@ metadata:
     {{- include "convertigo.labels" . | nindent 4 }}-br
 spec:
   replicas: 1
+  # The all-in-one image shares its Redis data and migrates the database at startup.
+  # Stop the old version before starting a pod with the same persistent volume.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-br

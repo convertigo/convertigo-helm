@@ -45,6 +45,7 @@ default = render()
 assert not plugin_objects(default)
 # The default Baserow image is one the plugin is tested on
 assert 'image: baserow/baserow:1.34.5' in documents(default)['templates/BRdeployment.yaml']
+assert 'strategy:\n    type: Recreate' in documents(default)['templates/BRdeployment.yaml']
 assert '1.34.5' in lock['tested_baserow_versions']
 assert 'templates/BRconfigmapC8oforms.yaml' in documents(render(*enabled))
 assert render('--set', 'baserow.plugins.c8oforms.enabled=false') == default

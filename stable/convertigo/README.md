@@ -123,8 +123,8 @@ Find below the values.yaml customization options :
 The chart deploys Baserow 1.34.5, the version of the Convertigo cloud, instead of 1.30.1. To
 postpone the upgrade, keep `baserow.image.tag: 1.30.1` in your values.
 
-- At its first start, Baserow 1.34.5 migrates its database (about 80 migrations from 1.30.1, a
-  few seconds on a small database, longer on a big one). There is no way back to 1.30.1: back up
+- At its first start, Baserow 1.34.5 migrates its database (83 migrations from 1.30.1; duration
+  depends on database size and available resources). There is no way back to 1.30.1: back up
   the Baserow database first, for example with `pg_dump` in the TimescaleDB pod.
 - The Baserow Deployment uses `Recreate`: the old instance stops before the new one starts,
   so two versions cannot share the all-in-one image's Redis files or serve requests during

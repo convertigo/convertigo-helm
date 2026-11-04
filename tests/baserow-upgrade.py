@@ -198,11 +198,16 @@ try:
         tables.append(api('POST', '/api/database/tables/database/%s/' % database,
                           {'name': name, 'data': [['Name']], 'first_row_header': True}, auth)['id'])
     categories, entries = tables
+    field_ids = {}
     for field in [dict(name='Category', type='link_row', link_row_table_id=categories),
                   dict(name='Amount', type='number', number_decimal_places=2),
                   dict(name='Active', type='boolean'),
                   dict(name='Double', type='formula', formula="field('Amount') * 2")]:
-        api('POST', '/api/database/fields/table/%s/' % entries, field, auth)
+        field_ids[field['name']] = api('POST', '/api/database/fields/table/%s/' % entries, field, auth)['id']
+    category_name = api('GET', '/api/database/fields/table/%s/' % categories, auth=auth)[0]['id']
+    api('POST', '/api/database/fields/table/%s/' % entries,
+        dict(name='CategoryName', type='lookup', through_field_id=field_ids['Category'],
+             target_field_id=category_name), auth)
     category_ids = [api('POST', '/api/database/rows/table/%s/?user_field_names=true' % categories,
                         {'Name': name}, auth)['id'] for name in ['Group A', 'Group B']]
     values = [dict(Name='Entry %03d' % i, Amount=str(i), Active=i % 2 == 0,
@@ -238,11 +243,14 @@ try:
     api('GET', path, expected=401)
     summary = aggregate(entries, token_auth, aggregations='total=sum:Amount,avg=avg:Amount')
     assert summary['results'] == [{'count': 251, 'total': 31626.0, 'avg': 126.0}], summary
-    grouped = aggregate(entries, auth, group_by='Category', aggregations='total=sum:Amount',
+    # Multi-valued link_row fields are intentionally unsupported; their lookup is supported.
+    rejected = api('GET', path + '?user_field_names=true&group_by=Category', auth=auth, expected=400)
+    assert rejected['error'] == 'ERROR_C8O_AGGREGATE_GROUP_BY_NOT_SUPPORTED'
+    grouped = aggregate(entries, auth, group_by='CategoryName', aggregations='total=sum:Amount',
                         with_fields='true')
     assert grouped['count'] == 2 and sum(r['count'] for r in grouped['results']) == 251
     assert sum(r['total'] for r in grouped['results']) == 31626.0
-    assert len(grouped['fields']) == 5
+    assert len(grouped['fields']) == 6
     filtered = aggregate(entries, token_auth, aggregations='sum:Amount', filter__Active__boolean='true')
     assert filtered['results'] == [{'count': 125, 'sum:Amount': 15750.0}], filtered
     api('GET', path + '?user_field_names=true&group_by=Missing', auth=auth, expected=400)
@@ -252,7 +260,9 @@ try:
                   dict(Name='Written after upgrade', Amount='42.50', Category=category_ids), token_auth)
     assert Decimal(written['Double']) == Decimal('85.00'), written
     before[entries] = rows(entries, token_auth)
+    print(run('free', '-m'), flush=True)
     run('docker', 'restart', '-t', '30', current)
+    set_api_root()
     wait_ready()
     assert rows(entries, token_auth) == before[entries]
     assert aggregate(entries, token_auth, aggregations='sum:Amount')['results'][0]['count'] == 252

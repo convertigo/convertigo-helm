@@ -109,13 +109,16 @@ data:
         rm -rf "$TMP_DIR"
     fi
 
-    # Set ownership only if not already owned
-    if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
-        chown -R convertigo:convertigo "$PROJECTS_DIR"
-    fi
+    # Root installations hand these files to the Convertigo user. An arbitrary
+    # non-root UID keeps the existing ownership and relies on volume permissions.
+    if [[ $(id -u) == "0" ]]; then
+        if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
+            chown -R convertigo:convertigo "$PROJECTS_DIR"
+        fi
 
-    if [[ $(stat -c "%U" "$CONFIG_DIR") != "convertigo" ]]; then
-        chown -R convertigo:convertigo "$CONFIG_DIR"
+        if [[ $(stat -c "%U" "$CONFIG_DIR") != "convertigo" ]]; then
+            chown -R convertigo:convertigo "$CONFIG_DIR"
+        fi
     fi
 
     echo "Setup completed successfully!"

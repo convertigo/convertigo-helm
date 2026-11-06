@@ -155,6 +155,33 @@ Resolve the external Baserow URL.
 {{- end }}
 
 {{/*
+C8oForms plugin of Baserow, as JSON: enabled, and when enabled the archive, the ConfigMap holding it and its lock
+(files/baserow-plugins/c8oforms.json). Fails on a Baserow image tag the plugin is not tested on, or on an embedded
+archive that does not match its lock. Values from before the key existed (--reuse-values): disabled.
+*/}}
+{{- define "convertigo.baserowC8oforms" -}}
+{{- $plugin := dig "plugins" "c8oforms" (dict) .Values.baserow -}}
+{{- $result := dict "enabled" false -}}
+{{- if and .Values.baserow.enabled $plugin.enabled -}}
+  {{- $lock := .Files.Get "files/baserow-plugins/c8oforms.json" | fromJson -}}
+  {{- $tag := toString .Values.baserow.image.tag -}}
+  {{- if not (has $tag $lock.tested_baserow_versions) -}}
+    {{- fail (printf "baserow.plugins.c8oforms (%s) is tested on Baserow %s: set baserow.image.tag to one of them, not %q (an upgrade of Baserow migrates its database)" $lock.release (join ", " $lock.tested_baserow_versions) $tag) -}}
+  {{- end -}}
+  {{- $path := printf "files/baserow-plugins/%s" $lock.archive -}}
+  {{- $configMap := default "" $plugin.existingConfigMap -}}
+  {{- if not $configMap -}}
+    {{- if ne (sha256sum (.Files.Get $path)) $lock.sha256 -}}
+      {{- fail (printf "%s does not match the sha256 of files/baserow-plugins/c8oforms.json" $path) -}}
+    {{- end -}}
+    {{- $configMap = printf "%s-c8oforms-%s" (include "convertigo.fullname" .) (trunc 16 $lock.sha256) -}}
+  {{- end -}}
+  {{- $result = merge (dict "enabled" true "create" (not $plugin.existingConfigMap) "configMap" $configMap "path" $path) $lock -}}
+{{- end -}}
+{{- toJson $result -}}
+{{- end }}
+
+{{/*
 Resolve session store mode.
 auto -> redis when redis.enabled=true, otherwise tomcat.
 */}}

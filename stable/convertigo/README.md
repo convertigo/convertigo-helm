@@ -37,6 +37,7 @@ Find below the values.yaml customization options :
 | extraVolumes                      | []                     | Extra volumes mounted on the Convertigo pod, for example Redis TLS secrets. |
 | extraVolumeMounts                 | []                     | Extra volume mounts for the Convertigo container. |
 | extraContainers / extraInitContainers | []                 | Additional containers of the Convertigo pod, for example a Vault agent writing secrets to a shared volume. |
+| workspaceOwnershipInit.enabled     | true                   | Run the built-in root init container that prepares `/workspace` ownership. Disable when the runtime UID can already write the volume, for example with supported `fsGroup` permissions. Does not disable `extraInitContainers`. See [Non-root deployments](#non-root-deployments). |
 | sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
 | sessionStore.redis.*              |                        | Optional Redis client settings used when `sessionStore.mode=redis` and `redis.enabled=false`. |
 | sessionStore.redis.topology       | single                 | `single` or `sentinel`. Sentinel requires Convertigo 8.4.7+ and an external Redis/Sentinel deployment. |
@@ -107,7 +108,7 @@ Find below the values.yaml customization options :
 | couchdb.resources                 | {}                     | Resources restriction for couchdb. |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
 | baserow.image.repository          | baserow/baserow        | Baserow image repository. Customize if using another repository. |
-| baserow.image.tag                 | 1.30.1                 | Baserow image tag. Customize if using a specific version. |
+| baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
 | baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
@@ -116,6 +117,136 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
 | baserow.resources                     | {}                 | Resources restriction for baserow. |
+| baserow.plugins.c8oforms.enabled      | false              | Install the C8oForms plugin (0.3.1, pinned) in Baserow. Requires `baserow.image.tag` 1.34.5 (the default) or 2.4.1. See [C8oForms plugin of Baserow](#c8oforms-plugin-of-baserow). |
+| baserow.plugins.c8oforms.existingConfigMap |               | Existing ConfigMap holding `c8oforms-0.3.1.tar.gz`, used instead of the archive embedded in the chart. |
+
+## Baserow 1.34.5
+
+The chart deploys Baserow 1.34.5, the version of the Convertigo cloud, instead of 1.30.1. To
+postpone the upgrade, keep `baserow.image.tag: 1.30.1` in your values.
+
+- At its first start, Baserow 1.34.5 migrates its database (83 migrations from 1.30.1; duration
+  depends on database size and available resources). There is no way back to 1.30.1: back up
+  the Baserow database first, for example with `pg_dump` in the TimescaleDB pod.
+- The Baserow Deployment uses `Recreate`: the old instance stops before the new one starts,
+  so two versions cannot share the all-in-one image's Redis files or serve requests during
+  each other's startup migrations. Plan downtime for the upgrade. A Helm rollback does not
+  reverse the database migrations; recovery requires matching database and Baserow volume backups.
+- The users, tokens, workspaces and rows are kept: the Baserow volume keeps its secret keys.
+- From 1.34.0, the full-text search data is kept in one table per workspace instead of one column
+  per field. Baserow rebuilds it in the background after the upgrade.
+- REST API changes that can matter to API clients: a page after the last one returns an empty
+  list instead of the error `ERROR_INVALID_PAGE` (1.33.0); a request that fails on a database
+  deadlock returns HTTP 409 instead of 503 (1.33.3); the integration endpoint no longer returns
+  the fields of the tables (1.32.4); views return a limited number of linked items by default
+  (1.34.0). The `link_row_has` filter keeps its name, only its label became "has any of".
+- PostgreSQL 11 is no longer supported (1.31.0): the TimescaleDB of the chart runs PostgreSQL 16.
+- The chart widget of Baserow dashboards became a premium feature (1.33.0).
+- No environment variable to add or rename. The memory used by the Baserow container is about
+  the same (1.4 to 1.8 GiB in our tests).
+
+## C8oForms plugin of Baserow
+
+The C8oForms plugin adds the server side helpers of No Code Studio to Baserow, under
+`/api/c8o/` on its backend: group by and aggregations computed in SQL on the whole table
+(instead of the first rows read by the client), and two performance backports of Baserow 2.3
+for older versions. It has no frontend part, and adds no table nor migration.
+
+It is installed as on the Convertigo cloud: the official Baserow image installs, at each start,
+the archive given by `BASEROW_PLUGIN_URLS`, here a `file://` path mounted from a ConfigMap.
+The chart pins the version: `files/baserow-plugins/c8oforms-0.3.1.tar.gz`, the archive of the
+[v0.3.1 release](https://github.com/convertigo/baserow-plugin-c8oforms/releases/tag/v0.3.1),
+locked by its commit and sha256 in `files/baserow-plugins/c8oforms.json`: Baserow does not download it.
+
+The plugin is tested on Baserow **1.34.5** and **2.4.1** only, and the chart refuses another
+`baserow.image.tag` (1.30.1, for example).
+
+```yaml
+baserow:
+  plugins:
+    c8oforms:
+      enabled: true
+```
+
+- The archive is in an immutable ConfigMap named after its sha256 and mounted read-only at
+  `/c8o-plugins`. A new version of the plugin comes with a new chart, a new ConfigMap, and restarts Baserow.
+- The all-in-one image keeps the plugins it installs in `/baserow/data/plugins`, on the Baserow
+  volume, and reinstalls them at each start. With the plugin enabled, an `emptyDir` is mounted
+  there, so the mounted archive is the only source: setting `enabled: false` removes the plugin
+  at the next start, and an upgrade does not keep the previous version. Other plugins installed
+  by hand in that directory are not loaded while the C8oForms plugin is enabled.
+- Each feature can be turned off on its own: see the
+  [plugin documentation](https://github.com/convertigo/baserow-plugin-c8oforms#readme).
+- At each start, Baserow installs the plugin with `pip`; the plugin has no Python dependency.
+  The log then says `Loaded backend plugins: c8oforms`. If the archive is missing or invalid,
+  Baserow does not start.
+- It installs without Internet access: the chart sets `PIP_NO_BUILD_ISOLATION=false` (pip reads
+  this variable inverted), so that pip builds the plugin with the setuptools of the image
+  instead of downloading them from PyPI, which would stop Baserow on a cluster without Internet.
+- To provide the archive yourself (for example from your own artifact repository), create a
+  ConfigMap holding it under the key `c8oforms-0.3.1.tar.gz` and set
+  `baserow.plugins.c8oforms.existingConfigMap`. Changing the content of that ConfigMap needs a
+  restart of Baserow: prefer a new ConfigMap name.
+
+For maintainers, run `python3 tests/baserow-plugin.py` from the repository root to check the
+rendering: disabled by default, enabled on each tested Baserow version, existing ConfigMap,
+untested Baserow and altered archive refused. To update the plugin, replace the archive by the
+one of the new release, update `c8oforms.json` (release, commit, sha256, tested Baserow
+versions) and the archive name in `values.yaml` and this README.
+
+To exercise the upgrade without Kubernetes, first pull `baserow/baserow:1.30.1`,
+`baserow/baserow:1.34.5` and `timescale/timescaledb:latest-pg16`, then run
+`python3 tests/baserow-upgrade.py`. It uses an internal Docker network, the chart's rendered
+startup command and plugin archive, and disposable credentials. It verifies linked rows,
+formulas, token continuity, migrations, aggregations, restart and plugin removal. Containers
+are stopped at the end; test data under `.tmp/` and Docker resources are retained.
+
+## Non-root deployments
+
+`workspaceOwnershipInit.enabled` defaults to `true` to preserve existing installations.
+Set it to `false` to omit the built-in `volume-mount-hack` init container, which always
+runs as UID 0, even when `podSecurityContext.runAsUser` selects a non-root UID for
+Convertigo. User-provided `extraInitContainers` are preserved.
+
+To disable it in a values file:
+
+```yaml
+workspaceOwnershipInit:
+  enabled: false
+```
+
+The setting can also be supplied as `--set workspaceOwnershipInit.enabled=false`.
+When upgrading with `--reuse-values`, an absent setting keeps the built-in init
+container enabled, as in the previous chart; explicitly set it to `false` to opt out.
+
+Before disabling it, ensure that the runtime UID can write the workspace, including
+existing `projects` and `configuration` contents. This can be provided by the volume's
+existing permissions or by `podSecurityContext.fsGroup` when supported by the storage
+driver. `fsGroup` changes group access; it does not make an arbitrary UID the owner.
+When started as root, the image entrypoint also adjusts `/workspace` ownership, but
+this does not replace the non-root permission requirements of a restricted cluster.
+
+The project installation script works with the running non-root UID and preserves
+file ownership. It only uses `chown` when started as root, before the image switches
+to the `convertigo` user. Keep appropriate group permissions on reused workspaces;
+disabling the init container cannot repair an inaccessible volume.
+
+For OpenShift, use the UID/group permissions allowed by the namespace's SCC rather
+than assuming a fixed UID such as 1000. A server process already running as non-root
+does not imply that its init containers were admitted under a restricted SCC.
+
+This option alone does not make the full chart Pod Security Restricted compliant.
+Also configure `runAsNonRoot`, `allowPrivilegeEscalation: false`, capabilities and
+seccomp as required by the cluster. Check every deployed service and extra container:
+the bundled databases may require different users and volume permissions. A read-only
+root filesystem is a separate setting that also requires writable mounts for the
+files modified at startup; it is not enabled by this option.
+
+For maintainers, run `python3 tests/workspace-ownership.py` from the repository root
+to check the rendered init containers. Add `--docker` to exercise the rendered
+installation script with fresh and reused workspaces, UID 1000, arbitrary UIDs,
+supplemental group permissions and root. These isolated Docker tests use a small
+local project archive and do not validate OpenShift admission or storage drivers.
 
 ## External CouchDB example
 

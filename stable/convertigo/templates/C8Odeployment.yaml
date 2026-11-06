@@ -1,4 +1,6 @@
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
+{{- /* Preserve the old init container when --reuse-values omits this new setting. */ -}}
+{{- $workspaceOwnershipInitEnabled := dig "enabled" true (.Values.workspaceOwnershipInit | default dict) -}}
 {{- $redisTls := default dict .Values.redis.tls -}}
 {{- $embeddedRedis := and (eq $sessionMode "redis") .Values.redis.enabled -}}
 {{- $embeddedRedisTls := and $embeddedRedis $redisTls.enabled (include "convertigo.redisTlsSecretName" .) -}}
@@ -150,10 +152,12 @@ spec:
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- if or $workspaceOwnershipInitEnabled .Values.extraInitContainers }}
       initContainers:
         {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if $workspaceOwnershipInitEnabled }}
         - command:
           - 'sh'
           - '-c'
@@ -168,6 +172,8 @@ spec:
           volumeMounts:
               - name: c8o-workspace
                 mountPath: /workspace
+        {{- end }}
+      {{- end }}
       
       {{- with .Values.nodeSelector }}
       nodeSelector:

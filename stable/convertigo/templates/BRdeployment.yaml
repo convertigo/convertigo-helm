@@ -1,4 +1,5 @@
 {{- if .Values.baserow.enabled }}
+{{- $c8oforms := include "convertigo.baserowC8oforms" . | fromJson }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +8,10 @@ metadata:
     {{- include "convertigo.labels" . | nindent 4 }}-br
 spec:
   replicas: 1
+  # The all-in-one image shares its Redis data and migrates the database at startup.
+  # Stop the old version before starting a pod with the same persistent volume.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-br
@@ -25,7 +30,18 @@ spec:
       volumes: 
         - name : br-data
           persistentVolumeClaim:
-            claimName: {{ include "convertigo.fullname" . }}-br-workspace                   
+            claimName: {{ include "convertigo.fullname" . }}-br-workspace
+        {{- if $c8oforms.enabled }}
+        # C8oForms plugin: the archive is installed by the image at each start, from BASEROW_PLUGIN_URLS.
+        - name: c8oforms-plugin
+          configMap:
+            name: {{ $c8oforms.configMap }}
+        # The all-in-one image keeps its installed plugins in /baserow/data/plugins, on the Baserow volume, and
+        # reinstalls them at each start. An emptyDir there leaves the archive above as the only source, as with
+        # the baserow/backend image: disabling the plugin or changing its version takes effect at the next start.
+        - name: br-plugins
+          emptyDir: {}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}-br
           command: ["/bin/sh", "-c", "sed -i -e s,127.0.0.1,0.0.0.0, /baserow/supervisor/default_baserow_env.sh && /baserow.sh start"]
@@ -35,6 +51,13 @@ spec:
           volumeMounts:
             - name: br-data
               mountPath: /baserow/data
+            {{- if $c8oforms.enabled }}
+            - name: br-plugins
+              mountPath: /baserow/data/plugins
+            - name: c8oforms-plugin
+              mountPath: /c8o-plugins
+              readOnly: true
+            {{- end }}
           env:
             - name: BASEROW_PUBLIC_URL
               value: {{ include "convertigo.baserowPublicUrl" . | quote }}
@@ -50,6 +73,16 @@ spec:
               value: {{ .Values.baserow.baserow_user }}
             - name: DATABASE_PASSWORD
               value: {{ .Values.baserow.baserow_password }}
+            {{- if $c8oforms.enabled }}
+            # Next to the mount: a container with the variable and without the file does not start.
+            - name: BASEROW_PLUGIN_URLS
+              value: {{ printf "file:///c8o-plugins/%s" $c8oforms.archive | quote }}
+            # The image installs the plugin with pip, by default in an isolated build environment that downloads
+            # setuptools from PyPI: without Internet access, Baserow would not start. "false" (sic, pip inverts
+            # this variable) builds it with the setuptools of the image instead, offline.
+            - name: PIP_NO_BUILD_ISOLATION
+              value: "false"
+            {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

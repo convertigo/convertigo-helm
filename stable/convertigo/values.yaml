@@ -6,14 +6,21 @@
 #You can scale up or down this number depending on your needs
 replicaCount: 1
 
+# Seconds a rollout can wait for new pods to become ready before Kubernetes reports it as failed
+# (Kubernetes default: 600). Raise it when a new pod may wait long for Redis (network convergence).
+progressDeadlineSeconds: ""
+
 rootRedirect: /convertigo/
 
 image:
-  repository: convertigo
-  pullPolicy: IfNotPresent
+  # The hotfix and develop branches of this chart use the image built from the same branch of Convertigo
+  # (convertigo/convertigo-ci, tag hotfix or develop, always pulled). A release on master must restore the
+  # official image: repository convertigo, pullPolicy IfNotPresent, tag "" (tests/release-image.sh).
+  repository: convertigo/convertigo-ci
+  pullPolicy: Always
   jxmx: "1024"
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "hotfix"
 
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
@@ -49,6 +56,14 @@ serviceAccount:
   name: "c8o-convertigo"
 
 podAnnotations: {}
+
+# Root init container that prepares the ownership of /workspace. Keep enabled for
+# compatibility; disable when the volume is already writable by the runtime UID,
+# or when the storage driver supports permission management with fsGroup.
+# Restricted clusters must disable it and configure non-root security contexts.
+# This switch only controls the built-in init container, not extraInitContainers.
+workspaceOwnershipInit:
+  enabled: true
 
 podSecurityContext: {}
   # fsGroup: 2000
@@ -125,6 +140,9 @@ affinity: {}
 additionalJavaOpts: []
 extraVolumes: []
 extraVolumeMounts: []
+# Additional containers of the Convertigo pod, for example a Vault agent writing secrets to a shared volume.
+extraInitContainers: []
+extraContainers: []
 
 # ====== Session store (sticky or stateless) ================================================================
 sessionStore:
@@ -134,11 +152,29 @@ sessionStore:
   redis:
     # Optional client settings, mainly for external Redis when redis.enabled=false.
     # Embedded Redis still uses the redis.* server settings below.
+    # single (default) or sentinel (Convertigo 8.4.7+; external Redis only).
+    topology: single
+    # Convertigo 8.4.7+. When Redis is unreachable at startup: none (retry until it is reachable, the pod
+    # stays not ready meanwhile) or tomcat (local sessions until the pod restarts). Empty: none.
+    startupFallback: ""
+    # Convertigo 8.4.7+. Seconds Redis can be unreachable, once connected, before the supervision reports
+    # convertigo.session.store=KO and the readiness probe starts failing (a Sentinel failover must not
+    # remove every pod from the Service). Empty: 60.
+    readinessGrace: ""
     host: ""
     port: ""
     username: ""
     password: ""
     database: ""
+    sentinel:
+      # Deploy Redis/Sentinel separately. Requires mode: redis and redis.enabled: false.
+      master: ""
+      # Seed nodes as host:port, for example sentinel-0.redis.svc.cluster.local:26379.
+      nodes: []
+      # Optional Sentinel ACL credentials, independent of Redis data credentials above.
+      username: ""
+      # Empty: use the Redis data password if Sentinel requires authentication.
+      password: ""
     ssl:
       enabled: false
       truststore: ""
@@ -170,6 +206,12 @@ redis:
   auth:
     enabled: true
     password: ChangeMe!
+    # Existing secret holding the password, used instead of password.
+    existingSecret: ""
+    existingSecretPasswordKey: redis-password
+    # File holding the password, used instead of password and existingSecret. The file must be provided in the
+    # Redis pods (redis.extraVolumes) and in the Convertigo pods (extraVolumes), for example by a Vault agent.
+    passwordFile: ""
   tls:
     # Disabled by default. When enabled, Redis listens on TLS only.
     enabled: false
@@ -177,6 +219,8 @@ redis:
     authClients: true
     # Existing secret mounted in both Redis and Convertigo pods.
     # Expected default keys: ca.crt, redis.crt, redis.key, truststore.p12, client.p12.
+    # Empty: no secret is mounted, the files must be provided at mountPath by your own volumes
+    # (redis.extraVolumes for Redis, extraVolumes for Convertigo), for example by a Vault agent.
     existingSecret: ""
     mountPath: /etc/convertigo/redis-tls
     caCertKey: ca.crt
@@ -204,6 +248,36 @@ redis:
     # requests:
     #   cpu: 150m
     #   memory: 256Mi
+  sentinel:
+    # Convertigo 8.4.7+. Highly available Redis: a StatefulSet of replicas pods, each running Redis and Sentinel
+    # (same image), 1 master and replicas - 1 replicas. Sentinel promotes a replica when the master fails and
+    # Convertigo follows it. false: a single Redis pod.
+    enabled: false
+    replicas: 3
+    masterName: convertigo
+    quorum: 2
+    port: 26379
+    # Time before an unreachable master is declared down, then the failover runs.
+    downAfterMilliseconds: 5000
+    failoverTimeout: 30000
+    # Pods and Sentinels are advertised by host name: <release>-convertigo-redis-N.<release>-convertigo-redis-headless.<namespace>.svc.<clusterDomain>
+    clusterDomain: cluster.local
+    resources: {}
+  # Pod settings for the Redis pods (single or Sentinel).
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  # Sentinel only. Empty: pods preferably spread on different nodes.
+  affinity: {}
+  # Sentinel only. A planned stop of the master waits for the promotion of a replica.
+  terminationGracePeriodSeconds: 60
+  # Mounted in the Redis (and Sentinel) containers, for example a volume shared with a Vault agent.
+  extraVolumes: []
+  extraVolumeMounts: []
+  extraInitContainers: []
+  extraContainers: []
 
 # ====== Workspace ========== This is where the Convertigo workspace will be stored ===============================
 workspace:
@@ -219,8 +293,10 @@ readinessProbe:
   # If exec.command is provided, the template will use exec to validate readiness (allows checking response body).
   # Otherwise httpGet will be used.
   exec:
-    # example: checks that the body contains convertigo.started=OK
-    command: ["sh", "-c", "curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+    # Ready when the engine is started, the projects of its workspace are loaded and, in Redis mode, its session
+    # store is usable (Convertigo 8.4.7+). Older images do not report convertigo.projects nor convertigo.session.store:
+    # only convertigo.started is checked for them.
+    command: ["sh", "-c", "s=$(curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.session.store=KO' && ! echo \"$s\" | grep -q 'convertigo.projects=KO'"]
   httpGet:
     path: /convertigo/admin/services/engine.Supervision
     port: http
@@ -270,11 +346,23 @@ baserow:
   enabled: true
   image:
     repository: baserow/baserow
-    tag: 1.30.1
+    # Upgrading from an earlier version migrates the Baserow database at the first start, with no way back:
+    # back it up first. See the README, "Baserow 1.34.5".
+    tag: 1.34.5
   baserow_db : baserow
   baserow_user: baserow
   baserow_password: N0Passworw0rd
   baserow_public_url: ""
+  plugins:
+    # C8oForms plugin of Baserow (backend only): whole-table SQL aggregations under /api/c8o/ for No Code Studio,
+    # and performance backports. Installed at each start of Baserow from BASEROW_PLUGIN_URLS, a file:// archive
+    # mounted from a ConfigMap, as on the Convertigo cloud. Pinned by the chart: c8oforms 0.3.1, embedded in
+    # files/baserow-plugins; it installs without Internet access. Requires a Baserow image tag the plugin is tested
+    # on: 1.34.5 (the default) or 2.4.1. See the README, "C8oForms plugin of Baserow".
+    c8oforms:
+      enabled: false
+      # Existing ConfigMap holding the archive under the key c8oforms-0.3.1.tar.gz, used instead of the embedded one.
+      existingConfigMap: ""
   persistentVolume:
     # adapt the storage class to your environment
     storageClass: ebs-sc

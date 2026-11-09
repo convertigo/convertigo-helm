@@ -1,0 +1,69 @@
+# Redis + Sentinel for the Convertigo session store, with mTLS.
+# Chart: oci://registry-1.docker.io/cloudpirates/redis, tested with 0.37.2 (Redis 8.10.2) and Convertigo 8.4.7.
+# Release name: redis-sessions (the names below derive from it). See README.md.
+# 3 pods, each running Redis and Sentinel: 1 master + 2 replicas, 3 Sentinels, quorum 2.
+architecture: replication
+replicaCount: 3
+
+auth:
+  enabled: true
+  # Secret created beforehand (key: redis-password), never stored in these values.
+  existingSecret: redis-sessions-auth
+  existingSecretPasswordKey: redis-password
+  # Sentinel requires the same password.
+  sentinel: true
+
+tls:
+  enabled: true
+  # Secret with tls.crt, tls.key and ca.crt. The certificate must cover every advertised host name:
+  # *.<release>-headless.<namespace>.svc.cluster.local, plus the services Convertigo uses.
+  existingSecret: redis-sessions-tls
+  port: 6379
+  # mTLS: Redis and Sentinel require a client certificate signed by ca.crt.
+  authClients: true
+  client:
+    # Client certificate used by the chart's probes when mTLS is required.
+    existingSecret: redis-sessions-probe-tls
+
+sentinel:
+  enabled: true
+  masterName: sessions
+  quorum: 2
+  # Nodes and Sentinels are advertised by host name, so STRICT certificate verification works.
+  config:
+    announceHostnames: true
+  # Time before an unreachable master is declared down, then the failover runs.
+  downAfterMilliseconds: 5000
+  failoverTimeout: 30000
+  parallelSyncs: 1
+  # On a planned stop of the master (rollout, drain), wait for Sentinel to promote a replica first.
+  redisShutdownWaitFailover: true
+
+# Sessions survive a restart of all pods.
+persistence:
+  enabled: true
+  size: 2Gi
+
+# Sessions are never evicted silently, and every write is logged to disk.
+extraConfig: |
+  maxmemory-policy noeviction
+  appendonly yes
+  appendfsync everysec
+
+# Voluntary disruptions (drain, cluster upgrade) keep at least 2 pods.
+pdb:
+  enabled: true
+  minAvailable: 2
+
+# One pod per node: a node failure only takes down one Redis and one Sentinel.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: redis-sessions
+
+terminationGracePeriodSeconds: 60

@@ -19,6 +19,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Check the release image
+        run: tests/release-image.sh
+
       - name: Package Helm Chart
         run: |
           cd stable/convertigo 

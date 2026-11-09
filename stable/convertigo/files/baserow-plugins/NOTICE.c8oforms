@@ -1,0 +1,10 @@
+c8oforms
+Copyright (c) 2026 Convertigo, MIT license (see LICENSE).
+
+Parts of this software are taken from Baserow (https://github.com/baserow/baserow),
+Copyright (c) 2019-present Baserow B.V., under the MIT Expat license; the files
+concerned say so in their header:
+- plugins/c8oforms/backend/src/c8oforms/select_perf/backport.py
+- plugins/c8oforms/backend/src/c8oforms/response_memory/renderers.py
+- plugins/c8oforms/backend/tests/test_select_perf.py
+- plugins/c8oforms/backend/tests/test_response_memory.py

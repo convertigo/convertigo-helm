@@ -31,21 +31,40 @@ Find below the values.yaml customization options :
 | replicaCount                      | 1                      | Number of Convertigo workers to run. One worker will handle from 100 to 200 simultaneous users. |
 | image.repository                  | convertigo             | The Docker image repository (the Docker Official Image). Customize if you want to use another repository. |
 | image.tag                         |                        | The Docker image tag. Customize if you want to use a specific version. Default is the Chart app version. |
+| image.pullPolicy                  | IfNotPresent           | Image pull policy. The hotfix and develop branches of this repository use `convertigo/convertigo-ci` with the tag of the branch and `Always`; published charts use the official image. |
 | image.jxmx                        | 1024                   | The Java memory size in MB for a worker pod. 1024 MB is recommended. Increase this value to handle more users per worker, but it will use more memory resources from the cluster. |
 | additionalJavaOpts                | []                     | Extra lines appended to `JAVA_OPTS`, allowing custom JVM flags or overrides for bundled properties. |
 | extraVolumes                      | []                     | Extra volumes mounted on the Convertigo pod, for example Redis TLS secrets. |
 | extraVolumeMounts                 | []                     | Extra volume mounts for the Convertigo container. |
+| extraContainers / extraInitContainers | []                 | Additional containers of the Convertigo pod, for example a Vault agent writing secrets to a shared volume. |
+| workspaceOwnershipInit.enabled     | true                   | Run the built-in root init container that prepares `/workspace` ownership. Disable when the runtime UID can already write the volume, for example with supported `fsGroup` permissions. Does not disable `extraInitContainers`. See [Non-root deployments](#non-root-deployments). |
 | sessionStore.mode                 | auto                   | Session store mode: `auto` (redis if enabled, otherwise tomcat), `tomcat` (sticky sessions), or `redis` (stateless). |
 | sessionStore.redis.*              |                        | Optional Redis client settings used when `sessionStore.mode=redis` and `redis.enabled=false`. |
+| sessionStore.redis.topology       | single                 | `single` or `sentinel`. Sentinel requires Convertigo 8.4.7+ and an external Redis/Sentinel deployment. |
+| sessionStore.redis.sentinel.master |                       | Monitored master name declared in Sentinel (required in sentinel mode). |
+| sessionStore.redis.sentinel.nodes | []                     | Sentinel seed addresses as a YAML list of `host:port` (or comma-separated string). Required in sentinel mode. |
+| sessionStore.redis.sentinel.username |                     | Optional Sentinel ACL username, distinct from the Redis data username. |
+| sessionStore.redis.sentinel.password |                     | Optional Sentinel password. Empty: use the Redis data password if Sentinel requires authentication. |
+| sessionStore.redis.startupFallback |                       | Convertigo 8.4.7+. Behavior when Redis is unreachable at startup: `none` (default: retry in background, pod not ready meanwhile, ready by itself once Redis is reachable) or `tomcat` (local sessions until the pod restarts, no retry). See [Redis unreachable at startup](#redis-unreachable-at-startup). |
+| sessionStore.redis.readinessGrace |                        | Convertigo 8.4.7+. Seconds Redis can be unreachable, once connected, before the pod becomes not ready (default 60, covers a Sentinel failover). |
+| progressDeadlineSeconds           |                        | Seconds a rollout waits for ready pods before being reported as failed (Kubernetes default 600). |
 | sessionStore.redis.ssl.*          |                        | Optional Redis TLS/mTLS client settings: truststore, keystore, verification mode, and protocols. |
 | sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
-| redis.enabled                     | false                  | Deploy the embedded Redis service used for stateless sessions. When false, the chart does not configure Redis in Convertigo. |
+| redis.enabled                     | false                  | Deploy the embedded standalone Redis service. When false, use `sessionStore.mode=redis` and `sessionStore.redis.*` to configure external Redis. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
 | redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
+| redis.auth.existingSecret         |                        | Existing secret holding the Redis password (key `redis.auth.existingSecretPasswordKey`, default `redis-password`), used instead of `redis.auth.password`. |
+| redis.auth.passwordFile           |                        | File holding the Redis password, provided in the Redis and Convertigo pods by your own volumes (for example a Vault agent). Used instead of `password` and `existingSecret`. |
 | redis.tls.enabled                 | false                  | Enable TLS on the embedded Redis and configure Convertigo to connect with `rediss`. |
 | redis.tls.authClients             | true                   | Require client certificates on the embedded Redis when TLS is enabled. Set false for server-side TLS only. |
-| redis.tls.existingSecret          |                        | Secret mounted in both Redis and Convertigo pods for Redis TLS/mTLS certificates and Java stores. |
-| redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume. |
+| redis.tls.existingSecret          |                        | Secret mounted in both Redis and Convertigo pods for Redis TLS/mTLS certificates and Java stores. Empty: the files are provided at `redis.tls.mountPath` by your own volumes. |
+| redis.persistence.enabled         | false                  | Enable persistence for the embedded Redis data volume (one volume per pod with Sentinel). |
+| redis.sentinel.enabled            | false                  | Convertigo 8.4.7+. Highly available embedded Redis: 3 pods running Redis and Sentinel, automatic failover. See [Embedded Redis Sentinel](#embedded-redis-sentinel). |
+| redis.sentinel.replicas / quorum  | 3 / 2                  | Number of Redis + Sentinel pods (at least 3), and Sentinels needed to declare the master down. |
+| redis.sentinel.masterName         | convertigo             | Name of the master monitored by Sentinel. |
+| redis.sentinel.downAfterMilliseconds | 5000                | Time before an unreachable master is declared down. |
+| redis.podAnnotations, podSecurityContext, securityContext, nodeSelector, tolerations, affinity | | Pod settings of the Redis pods. |
+| redis.extraVolumes, extraVolumeMounts, extraContainers, extraInitContainers | [] | Additional volumes and containers of the Redis pods, for example a Vault agent. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
 | nocodestudio.version              | 2.1.14                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
@@ -87,7 +106,7 @@ Find below the values.yaml customization options :
 | couchdb.resources                 | {}                     | Resources restriction for couchdb. |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
 | baserow.image.repository          | baserow/baserow        | Baserow image repository. Customize if using another repository. |
-| baserow.image.tag                 | 1.30.1                 | Baserow image tag. Customize if using a specific version. |
+| baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
 | baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
@@ -96,6 +115,136 @@ Find below the values.yaml customization options :
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
 | baserow.accessModes                   | ["ReadWriteOnce"]  | Baserow PVC accessModes. |
 | baserow.resources                     | {}                 | Resources restriction for baserow. |
+| baserow.plugins.c8oforms.enabled      | false              | Install the C8oForms plugin (0.3.1, pinned) in Baserow. Requires `baserow.image.tag` 1.34.5 (the default) or 2.4.1. See [C8oForms plugin of Baserow](#c8oforms-plugin-of-baserow). |
+| baserow.plugins.c8oforms.existingConfigMap |               | Existing ConfigMap holding `c8oforms-0.3.1.tar.gz`, used instead of the archive embedded in the chart. |
+
+## Baserow 1.34.5
+
+The chart deploys Baserow 1.34.5, the version of the Convertigo cloud, instead of 1.30.1. To
+postpone the upgrade, keep `baserow.image.tag: 1.30.1` in your values.
+
+- At its first start, Baserow 1.34.5 migrates its database (83 migrations from 1.30.1; duration
+  depends on database size and available resources). There is no way back to 1.30.1: back up
+  the Baserow database first, for example with `pg_dump` in the TimescaleDB pod.
+- The Baserow Deployment uses `Recreate`: the old instance stops before the new one starts,
+  so two versions cannot share the all-in-one image's Redis files or serve requests during
+  each other's startup migrations. Plan downtime for the upgrade. A Helm rollback does not
+  reverse the database migrations; recovery requires matching database and Baserow volume backups.
+- The users, tokens, workspaces and rows are kept: the Baserow volume keeps its secret keys.
+- From 1.34.0, the full-text search data is kept in one table per workspace instead of one column
+  per field. Baserow rebuilds it in the background after the upgrade.
+- REST API changes that can matter to API clients: a page after the last one returns an empty
+  list instead of the error `ERROR_INVALID_PAGE` (1.33.0); a request that fails on a database
+  deadlock returns HTTP 409 instead of 503 (1.33.3); the integration endpoint no longer returns
+  the fields of the tables (1.32.4); views return a limited number of linked items by default
+  (1.34.0). The `link_row_has` filter keeps its name, only its label became "has any of".
+- PostgreSQL 11 is no longer supported (1.31.0): the TimescaleDB of the chart runs PostgreSQL 16.
+- The chart widget of Baserow dashboards became a premium feature (1.33.0).
+- No environment variable to add or rename. The memory used by the Baserow container is about
+  the same (1.4 to 1.8 GiB in our tests).
+
+## C8oForms plugin of Baserow
+
+The C8oForms plugin adds the server side helpers of No Code Studio to Baserow, under
+`/api/c8o/` on its backend: group by and aggregations computed in SQL on the whole table
+(instead of the first rows read by the client), and two performance backports of Baserow 2.3
+for older versions. It has no frontend part, and adds no table nor migration.
+
+It is installed as on the Convertigo cloud: the official Baserow image installs, at each start,
+the archive given by `BASEROW_PLUGIN_URLS`, here a `file://` path mounted from a ConfigMap.
+The chart pins the version: `files/baserow-plugins/c8oforms-0.3.1.tar.gz`, the archive of the
+[v0.3.1 release](https://github.com/convertigo/baserow-plugin-c8oforms/releases/tag/v0.3.1),
+locked by its commit and sha256 in `files/baserow-plugins/c8oforms.json`: Baserow does not download it.
+
+The plugin is tested on Baserow **1.34.5** and **2.4.1** only, and the chart refuses another
+`baserow.image.tag` (1.30.1, for example).
+
+```yaml
+baserow:
+  plugins:
+    c8oforms:
+      enabled: true
+```
+
+- The archive is in an immutable ConfigMap named after its sha256 and mounted read-only at
+  `/c8o-plugins`. A new version of the plugin comes with a new chart, a new ConfigMap, and restarts Baserow.
+- The all-in-one image keeps the plugins it installs in `/baserow/data/plugins`, on the Baserow
+  volume, and reinstalls them at each start. With the plugin enabled, an `emptyDir` is mounted
+  there, so the mounted archive is the only source: setting `enabled: false` removes the plugin
+  at the next start, and an upgrade does not keep the previous version. Other plugins installed
+  by hand in that directory are not loaded while the C8oForms plugin is enabled.
+- Each feature can be turned off on its own: see the
+  [plugin documentation](https://github.com/convertigo/baserow-plugin-c8oforms#readme).
+- At each start, Baserow installs the plugin with `pip`; the plugin has no Python dependency.
+  The log then says `Loaded backend plugins: c8oforms`. If the archive is missing or invalid,
+  Baserow does not start.
+- It installs without Internet access: the chart sets `PIP_NO_BUILD_ISOLATION=false` (pip reads
+  this variable inverted), so that pip builds the plugin with the setuptools of the image
+  instead of downloading them from PyPI, which would stop Baserow on a cluster without Internet.
+- To provide the archive yourself (for example from your own artifact repository), create a
+  ConfigMap holding it under the key `c8oforms-0.3.1.tar.gz` and set
+  `baserow.plugins.c8oforms.existingConfigMap`. Changing the content of that ConfigMap needs a
+  restart of Baserow: prefer a new ConfigMap name.
+
+For maintainers, run `python3 tests/baserow-plugin.py` from the repository root to check the
+rendering: disabled by default, enabled on each tested Baserow version, existing ConfigMap,
+untested Baserow and altered archive refused. To update the plugin, replace the archive by the
+one of the new release, update `c8oforms.json` (release, commit, sha256, tested Baserow
+versions) and the archive name in `values.yaml` and this README.
+
+To exercise the upgrade without Kubernetes, first pull `baserow/baserow:1.30.1`,
+`baserow/baserow:1.34.5` and `timescale/timescaledb:latest-pg16`, then run
+`python3 tests/baserow-upgrade.py`. It uses an internal Docker network, the chart's rendered
+startup command and plugin archive, and disposable credentials. It verifies linked rows,
+formulas, token continuity, migrations, aggregations, restart and plugin removal. Containers
+are stopped at the end; test data under `.tmp/` and Docker resources are retained.
+
+## Non-root deployments
+
+`workspaceOwnershipInit.enabled` defaults to `true` to preserve existing installations.
+Set it to `false` to omit the built-in `volume-mount-hack` init container, which always
+runs as UID 0, even when `podSecurityContext.runAsUser` selects a non-root UID for
+Convertigo. User-provided `extraInitContainers` are preserved.
+
+To disable it in a values file:
+
+```yaml
+workspaceOwnershipInit:
+  enabled: false
+```
+
+The setting can also be supplied as `--set workspaceOwnershipInit.enabled=false`.
+When upgrading with `--reuse-values`, an absent setting keeps the built-in init
+container enabled, as in the previous chart; explicitly set it to `false` to opt out.
+
+Before disabling it, ensure that the runtime UID can write the workspace, including
+existing `projects` and `configuration` contents. This can be provided by the volume's
+existing permissions or by `podSecurityContext.fsGroup` when supported by the storage
+driver. `fsGroup` changes group access; it does not make an arbitrary UID the owner.
+When started as root, the image entrypoint also adjusts `/workspace` ownership, but
+this does not replace the non-root permission requirements of a restricted cluster.
+
+The project installation script works with the running non-root UID and preserves
+file ownership. It only uses `chown` when started as root, before the image switches
+to the `convertigo` user. Keep appropriate group permissions on reused workspaces;
+disabling the init container cannot repair an inaccessible volume.
+
+For OpenShift, use the UID/group permissions allowed by the namespace's SCC rather
+than assuming a fixed UID such as 1000. A server process already running as non-root
+does not imply that its init containers were admitted under a restricted SCC.
+
+This option alone does not make the full chart Pod Security Restricted compliant.
+Also configure `runAsNonRoot`, `allowPrivilegeEscalation: false`, capabilities and
+seccomp as required by the cluster. Check every deployed service and extra container:
+the bundled databases may require different users and volume permissions. A read-only
+root filesystem is a separate setting that also requires writable mounts for the
+files modified at startup; it is not enabled by this option.
+
+For maintainers, run `python3 tests/workspace-ownership.py` from the repository root
+to check the rendered init containers. Add `--docker` to exercise the rendered
+installation script with fresh and reused workspaces, UID 1000, arbitrary UIDs,
+supplemental group permissions and root. These isolated Docker tests use a small
+local project archive and do not validate OpenShift admission or storage drivers.
 
 ## External CouchDB example
 
@@ -143,11 +292,168 @@ extraVolumeMounts:
     readOnly: true
 ```
 
+## Embedded Redis Sentinel
+
+Requires **Convertigo 8.4.7 or later**. With `redis.sentinel.enabled=true`, the chart deploys a
+highly available Redis instead of the single Redis pod, and configures Convertigo for it:
+
+- a StatefulSet of 3 pods, each running a Redis container and a Sentinel container from the same
+  `redis.image` (1 master, 2 replicas, 3 Sentinels, quorum 2);
+- a headless service `<fullname>-redis-headless`: pods and Sentinels are advertised by host name,
+  `<fullname>-redis-N.<fullname>-redis-headless.<namespace>.svc.cluster.local`, so certificates can be
+  verified in `STRICT` mode;
+- AOF persistence (`appendfsync everysec`), `maxmemory-policy noeviction`, a PodDisruptionBudget
+  (one pod down at a time) and pods preferably spread on different nodes;
+- on a planned stop of the master (rollout, drain), Sentinel first promotes a replica;
+- a replica is ready only once in sync with the master, so a rollout never stops two copies at once.
+
+```yaml
+redis:
+  enabled: true
+  sentinel:
+    enabled: true
+  auth:
+    existingSecret: redis-auth   # key redis-password
+  persistence:
+    enabled: true
+    storageClass: standard
+```
+
+Convertigo receives `session.redis.topology=sentinel`, the master name and the 3 Sentinel addresses;
+`sessionStore.redis.*` is not used. Without persistence, a master restarted without data waits for
+Sentinel to promote a replica instead of serving an empty data set. Redis replication is asynchronous:
+an unexpected failure of the master can lose the last session changes not yet replicated.
+
+**Secrets without Kubernetes secrets (Vault).** The password and the TLS files can be provided by your
+own volumes instead of Kubernetes secrets, for example by a Vault agent (injector annotations in
+`redis.podAnnotations` and `podAnnotations`, or a sidecar in `redis.extraContainers` and
+`extraContainers` writing to a shared volume). The scripts wait up to 2 minutes for the files:
+
+```yaml
+redis:
+  enabled: true
+  sentinel:
+    enabled: true
+  auth:
+    passwordFile: /vault/secrets/redis-password
+  tls:
+    enabled: true
+    authClients: true
+    existingSecret: ""           # nothing mounted by the chart
+    mountPath: /vault/secrets    # ca.crt, redis.crt, redis.key, truststore.p12, client.p12
+    truststorePassword: changeit
+    keystorePassword: changeit
+  extraVolumes: [...]            # the volume holding the files, in the Redis pods
+  extraVolumeMounts:
+    - name: vault-secrets
+      mountPath: /vault/secrets
+extraVolumes: [...]              # the same files in the Convertigo pods
+extraVolumeMounts:
+  - name: vault-secrets
+    mountPath: /vault/secrets
+```
+
+The Redis server certificate is also used by replicas, Sentinels and probes as a client certificate:
+it needs the extended key usages `serverAuth` and `clientAuth`, and the subject alternative names
+`*.<fullname>-redis-headless.<namespace>.svc.cluster.local` and `localhost`.
+
+Tested on Kubernetes 1.37 with Redis 7.4.1 and Convertigo 8.4.7, mTLS with STRICT verification and the
+secrets written by a sidecar, two Convertigo pods, a client checking its session every 0.5 s:
+
+| Event | Result |
+| --- | --- |
+| Rolling restart of the 3 Redis pods | no error, no lost session; one request waited 9 s during the switch of the master |
+| Forced deletion of the master | no error, no lost session; requests waited up to 9 s |
+| Forced deletion of the master, without persistence | the restarted pod waited for the promotion of a replica and became a replica, no data lost, requests waited up to 7 s |
+
+Check the roles from a Redis pod:
+
+```sh
+kubectl exec <fullname>-redis-0 -c redis -- sh -c '. /scripts/common.sh; role;
+  $CLI -h localhost -p 26379 sentinel get-master-addr-by-name convertigo | head -1'
+```
+
+## External Redis Sentinel for session store
+
+Requires **Convertigo 8.4.7 or later**. To use a Redis Sentinel deployed outside this chart, keep
+`redis.enabled=false`: the chart then configures only the Convertigo client; it does not install
+Sentinel or manage its quorum, replication or failover.
+
+Deploy the Redis master, replicas and Sentinel nodes separately, for example using
+the [CloudPirates Redis chart](https://github.com/CloudPirates-io/helm-charts/tree/main/charts/redis)
+or an existing managed Sentinel service ([redis-ha](https://github.com/DandyDeveloper/charts/tree/master/charts/redis-ha)
+is another option, not tested with Convertigo). A tested example with mTLS, its values for both charts,
+a rolling procedure and measured failover times is in
+[examples/redis-sentinel](https://github.com/convertigo/convertigo-helm/tree/hotfix/examples/redis-sentinel). For production, use at least three
+Sentinels with quorum two, distributed across failure domains, and Redis replicas.
+Configure Sentinel-to-Redis authentication, persistence, TLS and anti-affinity in
+that dedicated deployment, not in the Convertigo chart.
+
+Replace the example DNS names with the endpoints advertised by that deployment:
+
+```yaml
+image:
+  tag: "8.4.7" # Select a Sentinel-capable Convertigo image, not an older chart default.
+redis:
+  enabled: false
+sessionStore:
+  mode: redis
+  redis:
+    topology: sentinel
+    database: 0
+    username: default
+    password: REDIS_DATA_PASSWORD
+    sentinel:
+      master: mymaster
+      nodes:
+        - sentinel-0.redis.example.svc.cluster.local:26379
+        - sentinel-1.redis.example.svc.cluster.local:26379
+        - sentinel-2.redis.example.svc.cluster.local:26379
+      # Optional ACL credentials for the Sentinel endpoints, not the Redis data nodes.
+      username: default
+      password: SENTINEL_PASSWORD
+```
+
+The single-server `host` and `port` are ignored in Sentinel mode. Seed nodes are
+used to discover the current master and other Sentinels. Every advertised address
+(including a promoted replica) must be reachable from the Convertigo pods; a
+load-balanced master service alone is not sufficient. Keep credential values out
+of source control and protect the Helm values/release data as for the existing
+Redis password settings.
+
+**Client limitation:** with the current Redisson 4.3.1 client, configuring a
+Sentinel password requires a Redis data password as well. Sentinel-only password
+authentication (unprotected data nodes) is explicitly rejected by Convertigo.
+Separate passwords and ACL users are supported when both endpoints authenticate.
+This is not a Redis Sentinel protocol requirement.
+
+The existing `sessionStore.redis.ssl.*` settings apply to **both** Sentinel and
+Redis data connections. For TLS/mTLS, mount stores as in the external Redis
+example above. All nodes must expose TLS, trust the client certificate when mTLS
+is required, and have certificates valid for their advertised hostnames when
+using `STRICT` verification. Mixed plaintext/TLS topologies are not supported.
+
+By default Sentinel advertises nodes by IP address. With `STRICT` verification,
+make each node advertise a host name present in its certificate
+(`replica-announce-ip` on Redis nodes; `sentinel resolve-hostnames yes`,
+`sentinel announce-hostnames yes` and `sentinel announce-ip` on Sentinels), or set
+`sessionStore.redis.ssl.verificationMode: CA_ONLY` to keep chain validation and
+mTLS without host name checks. A host name mismatch shows in the Convertigo log as
+`No subject alternative names matching IP address ...`.
+
+Convertigo reads and subscribes on the master, automatically follows Sentinel
+failover, and exposes the configured topology, master name, seed nodes and current master address in
+`engine.ListInstances`. Requests may wait or fail during election. Replication is
+asynchronous: a promoted replica can lose acknowledged writes that had not yet
+replicated, including session changes, locks and in-flight request markers.
+Sentinel is not an exactly-once execution guarantee; design retry-sensitive
+operations accordingly. See [Redis Sentinel guarantees](https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/).
+
 ## Embedded Redis TLS/mTLS
 
 The embedded Redis remains plaintext by default. To enable TLS/mTLS for the embedded Redis, keep `redis.enabled=true` and set `redis.tls.enabled=true`.
 
-The chart expects `redis.tls.existingSecret` to contain the Redis PEM files and the Convertigo Java stores. Default key names are:
+The chart expects `redis.tls.existingSecret` to contain the Redis PEM files and the Convertigo Java stores (or, when it is empty, the same files at `redis.tls.mountPath` provided by your own volumes). Default key names are:
 
 - `ca.crt`
 - `redis.crt`
@@ -203,10 +509,30 @@ This avoids log/cache collisions between replicas and avoids accumulating stale 
 The chart also sets `LOG_STDOUT=true` and `LOG_FILE=true`: the engine logs reach the pod standard output, where the cluster log pipeline (Fluent Bit, Fluentd, Filebeat...) can collect them, and stay available in the **Logs** view of the administration console. The log line format, the multi-line rule (`^!` starts a record) and a Fluent Bit example are documented in the [Centralize the logs](https://doc.convertigo.com/documentation/latest/operating-guide/production-deployment-recommendations/#centralize-the-logs) section of the Operating Guide.
 
 Notes on probes:
-- Readiness can use an exec probe to verify the supervision endpoint contains "convertigo.started=OK":
-  Example exec: ["sh","-c","curl -fsS http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision | grep -q 'convertigo.started=OK'"]
+- The default readiness probe is an exec probe on the supervision endpoint: the pod is ready when it reports `convertigo.started=OK` and reports neither `convertigo.projects=KO` (the projects of its workspace are still being loaded at startup) nor `convertigo.session.store=KO` (Convertigo 8.4.7+; older images do not report these lines and only `convertigo.started` is checked).
+- The liveness probe only checks that the endpoint answers: an unreachable Redis never restarts the pod.
 - If exec is not provided or not supported by the image, the chart falls back to httpGet (ensure port name/number matches container ports).
 - Exec probes require shell + curl + grep in the image; otherwise prefer httpGet.
+
+## Redis unreachable at startup
+
+With `sessionStore.mode=redis` and Convertigo 8.4.7+, a pod that cannot reach Redis when it starts
+behaves according to `sessionStore.redis.startupFallback`:
+
+| Value | Behavior |
+| --- | --- |
+| `none` (default) | The pod retries in background (backoff up to 30 s) and reports `convertigo.session.store=KO`: it stays out of the Service. Requests that need a session get `503` with `Retry-After`; stateless requests still work. Once Redis is reachable, the pod connects, becomes ready and shares its sessions with the other pods, without restart. |
+| `tomcat` | No retry: the pod keeps its sessions in memory until it is restarted and reports `convertigo.session.store=DEGRADED` (still ready). Sessions are not shared with the other pods: use it only with a single replica or sticky sessions. |
+
+Once connected, a pod that loses Redis reports `OK` for `sessionStore.redis.readinessGrace` seconds
+(default 60) so that a Sentinel failover does not remove every pod from the Service, then reports
+`KO` until Redis is back. With the default probe (`periodSeconds: 10`, `failureThreshold: 3`), the
+pod leaves the Service about 30 seconds later.
+
+During a rollout, a new pod waiting for Redis keeps the old pods running (rolling update). Kubernetes
+reports the rollout as failed after `progressDeadlineSeconds` (600 by default) without stopping it;
+raise it when the network can take longer to open the flows to Redis, and use a `helm --timeout`
+consistent with it when `--wait` is used.
 
 ## Needed annotations for nginx
 

@@ -3,6 +3,7 @@
 
 Requires helm, bash, Python and PyYAML. The fixture flock shim uses the host's real advisory locks;
 this tests process serialization, not a remote RWX driver's cross-node locking behavior.
+The credential CLI is mocked here; installation-credentials.py covers the real Java initializer.
 """
 import base64
 import hashlib
@@ -51,7 +52,7 @@ assert 'admin-credential' in {m['name'] for m in init['volumeMounts']}
 assert not any('ADMIN_PASSWORD' in e['name'] for e in main['env'])
 assert not any('admin.password' in str(e) for e in main['env'])
 assert main['startupProbe']['failureThreshold'] * main['startupProbe']['periodSeconds'] == 600
-admin = next(x for x in default if x['kind'] == 'Secret')
+admin = next(x for x in default if x['kind'] == 'Secret' and x['metadata']['name'].endswith('-admin'))
 assert len(base64.b64decode(admin['data']['password'])) == 48
 assert 'lookup "v1" "Secret"' in (CHART / 'templates/admin-secret.yaml').read_text()
 assert '169.254.169.254' not in installer(default)
@@ -75,8 +76,7 @@ envs = engine(docs)['containers'][0]['env']
 java_opts = next(x['value'] for x in envs if x['name'] == 'JAVA_OPTS')
 assert 'session.store.mode=redis' in java_opts and 'session.redis.topology=sentinel' in java_opts
 assert next(x['spec']['replicas'] for x in docs if x['kind'] == 'StatefulSet' and x['metadata']['name'].endswith('-redis')) == 3
-assert next(i for i, x in enumerate(envs) if x['name'] == 'TIMESCALE_PASSWORD') < next(
-    i for i, x in enumerate(envs) if x['name'] == 'JAVA_OPTS')
+assert not any(x['name'].endswith('_PASSWORD') for x in envs)
 for x in docs:
     if x['kind'] == 'Deployment' and x['metadata']['name'].endswith(('-cdb', '-timescale', '-br')):
         assert x['spec']['strategy']['type'] == 'Recreate'
@@ -101,6 +101,7 @@ with tempfile.TemporaryDirectory(prefix='chart-startup-fixture-') as directory:
             tar.addfile(member, io.BytesIO(data))
     def tool(name, body):
         p = tools / name; p.write_text('#!' + sys.executable + '\n' + body); p.chmod(0o755)
+    tool('java', 'import sys\nsys.exit(0)\n')
     tool('flock', '''import fcntl,os,sys,time
 fd=int(sys.argv[-1]); deadline=time.monotonic()+float(sys.argv[sys.argv.index('-w')+1])
 while True:

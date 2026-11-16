@@ -31,3 +31,14 @@ Convertigo Low Code Studio (For building Professional Low Code Applications)
    - "Server" to {{ include "convertigo.publicUrl" . }}/convertigo
    - "Https connexion" checked to true
    - "Trust all certificates" checked to true (Uncheck it to false if you have a valid non autosigned certificate)
+
+Installation credentials are stored in generated or explicitly selected Secrets. Keep these Secrets
+with the persistent data. Do not change crypto.passphrase on an existing installation: the engine
+does not re-encrypt existing data. A changed installation identity stops initialization.
+Older installations require explicit adoption using their unchanged credentials and a separate,
+authorized inventory/migration plan. A generated Secret must not replace existing database passwords.
+
+{{- if not (.Values.crypto | default dict).engineCompatibilityConfirmed }}
+New workspace passphrase initialization is currently disabled. Qualify the selected engine build
+before enabling crypto.engineCompatibilityConfirmed; do not use this switch to rotate existing data.
+{{- end }}

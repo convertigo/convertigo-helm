@@ -1,6 +1,9 @@
 # Offline render fixture only. No Secret values and no cluster credentials.
 replicaCount: 3
 publicAddr: demo.example.com
+credentials:
+  existingSecret: fixture-installation
+
 admin:
   existingSecret: fixture-admin
 workspace:
@@ -30,8 +33,6 @@ couchdb:
   existingSecret: fixture-couchdb
   existingSecretUsernameKey: username
   existingSecretPasswordKey: password
-  # Offline testing only; never deploy this fallback for a real credential.
-  existingSecretOptional: true
   persistentVolume:
     storageClass: fixture-rwo
 podAnnotations:

@@ -52,7 +52,7 @@ Find below the values.yaml customization options :
 | sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
 | redis.enabled                     | false                  | Deploy the embedded standalone Redis service. When false, use `sessionStore.mode=redis` and `sessionStore.redis.*` to configure external Redis. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
-| redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
+| redis.auth.password | | Deprecated inline setting; managed Redis credentials use generated or existing Secrets. |
 | redis.auth.existingSecret         |                        | Existing secret holding the Redis password (key `redis.auth.existingSecretPasswordKey`, default `redis-password`), used instead of `redis.auth.password`. |
 | redis.auth.passwordFile           |                        | File holding the Redis password, provided in the Redis and Convertigo pods by your own volumes (for example a Vault agent). Used instead of `password` and `existingSecret`. |
 | redis.tls.enabled                 | false                  | Enable TLS on the embedded Redis and configure Convertigo to connect with `rediss`. |
@@ -81,10 +81,10 @@ Find below the values.yaml customization options :
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
 | timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
 | timescaledb.user                  | postgres               | Database username Convertigo will use to connect to TimescaleDB. Customize as needed. |
-| timescaledb.password              | ChangeMe!              | Database password Convertigo will use to connect to TimescaleDB. Customize as needed. |
+| timescaledb.password | | Deprecated inline setting; use generated or existing credentials. |
 | timescaledb.billing_database      | c8oAnalytics           | Database name for storing usage analytics data. |
 | timescaledb.billing_user          | c8oAnalytics           | Username for accessing the billing database. |
-| timescaledb.billing_password      | c8oAnalytics           | Password for accessing the billing database. |
+| timescaledb.billing_password | | Deprecated inline setting; use generated or existing credentials. |
 | timescaledb.persistentVolume.storageClass | ebs-sc         | TimescaleDB PVC storageClass. |
 | timescaledb.persistentVolume.size         | 5Gi            | TimescaleDB PVC size. |
 | timescaledb.accessModes                   | ["ReadWriteOnce"] | TimescaleDB PVC accessModes. |
@@ -92,14 +92,14 @@ Find below the values.yaml customization options :
 | couchdb.enabled                   | true                   | Set to false when using an external CouchDB instance; skips deploying the bundled database and related resources. |
 | couchdb.urlOverride               |                        | Optional full CouchDB URL (including protocol and port) for Convertigo to use instead of the internal service. |
 | couchdb.existingSecret            |                        | Name of an existing secret providing CouchDB credentials (same namespace by default). |
-| couchdb.existingSecretNamespace   |                        | Namespace of the existing CouchDB credentials secret (defaults to the release namespace). |
+| couchdb.existingSecretNamespace | | Credential Secrets must be in the release namespace. |
 | couchdb.existingSecretUsernameKey |                        | Key inside the existing secret for the CouchDB username. |
-| couchdb.existingSecretPasswordKey |                        | Key inside the existing secret for the CouchDB password. |
+| couchdb.existingSecretPasswordKey | couchdb-password | Password key in the selected Secret. |
 | couchdb.existingSecretOptional    | false                  | Set to true to ignore missing/invalid existing secrets and fall back to inline values. |
 | couchdb.image.repository          | couchdb                | CouchDB image repository. Customize if using another repository. |
 | couchdb.image.tag                 | 3.5                    | CouchDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
-| couchdb.password                  | fullsyncpassword       | CouchDB admin password. |
+| couchdb.password | | Deprecated inline setting; use generated or existing credentials. |
 | couchdb.persistentVolume.storageClass | ebs-sc             | CouchDB PVC storageClass. |
 | couchdb.persistentVolume.size     | 5Gi                    | CouchDB PVC size. |
 | couchdb.accessModes               | ["ReadWriteOnce"]      | CouchDB PVC accessModes. |
@@ -109,7 +109,7 @@ Find below the values.yaml customization options :
 | baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
-| baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
+| baserow.baserow_password | | Deprecated inline setting; use generated or existing credentials. |
 | baserow.baserow_public_url        |                        | Optional Baserow-specific external URL. Defaults to `publicUrl`. |
 | baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
@@ -259,7 +259,7 @@ helm upgrade --install convertigo ./stable/convertigo \
   --set couchdb.existingSecretPasswordKey=password
 ```
 
-If the secret might be missing, add `--set couchdb.existingSecretOptional=true` to fall back to inline credentials.
+Credential Secrets must exist in the release namespace. Missing required keys stop initialization; no inline fallback is used.
 
 ## External Redis for session store
 
@@ -760,10 +760,34 @@ deleted. Review them separately when moving or correcting an existing non-AWS in
 
 TimescaleDB accepts `timescaledb.existingSecret` with `existingSecretPasswordKey` and
 `existingSecretBillingPasswordKey`. Baserow accepts `baserow.existingSecret` with
-`existingSecretPasswordKey`; use the same Baserow key for its PostgreSQL initialization. Existing
-value-based credentials remain supported. These references do not rotate database users on an
-already-initialized PVC. The engine's legacy database/Redis options still need separate log/environment
-handling; using Secret refs does not itself remove credentials from every runtime argument.
+`existingSecretPasswordKey`; use the same Baserow key for its PostgreSQL initialization. Managed
+credentials come from generated or selected Secrets. These references do not rotate database users
+on an already-initialized PVC. External Redis/TLS overrides still need private handling; no general
+claim is made about every externally supplied option.
 
 CouchDB and TimescaleDB use Recreate with RWO volumes. This avoids overlapping database versions
 but introduces a planned outage; retain a tested database backup/rollback procedure.
+
+
+## Installation credentials and upgrades
+
+A fresh installation generates a retained Secret with independent values for the encryption
+passphrase, Baserow administrator, PostgreSQL administrator, billing database, Baserow database,
+CouchDB and embedded Redis. `credentials.existingSecret` selects a managed Secret instead. Individual
+component Secret settings can override their reference; see [installation credentials](../../docs/installation-credentials.md) for
+keys and adoption requirements. Keep these Secrets with all persistent data; do not regenerate them
+on upgrade, reinstall or restoration. GitOps rendering should always use explicit stable Secrets.
+
+New passphrase initialization is gated by `crypto.engineCompatibilityConfirmed`, false by default.
+Set it only after the chosen engine build has passed qualification with installation-specific
+passphrases. The prepared chart metadata still targets the published image; a successful render
+is not a qualification of a new passphrase on that engine. Existing workspaces retain their current
+phrase, including the absence of an explicit property. They are never re-encrypted by this chart.
+
+The Baserow init completes database migrations, creates the initial staff account and closes public
+signup before the main HTTP service starts. It never resets an existing account password or promotes
+an unrelated existing user. A current installation needs explicit adoption and matching credentials.
+Bootstrap and application credential consistency must be qualified before rollout.
+
+Fresh workspace Context logging defaults to WARN. Project/motor logging improvements and any
+passphrase rotation are separate changes; the chart does not migrate existing encrypted data.

@@ -33,6 +33,17 @@ admin:
   existingSecret: ""
   passwordKey: password
 
+# Fresh installations generate stable credentials. Older installations must explicitly adopt
+# their current credentials through a Secret; this does not rotate any existing passphrase.
+credentials:
+  existingSecret: ""
+  adoptExisting: false
+crypto:
+  # Enable only after the selected engine build has been qualified with installation-specific passphrases.
+  engineCompatibilityConfirmed: false
+  existingSecret: ""
+  passphraseKey: crypto-passphrase
+
 # Installation completes before Tomcat starts. The workspace driver must support flock across nodes.
 projectInstallation:
   enabled: true
@@ -228,7 +239,7 @@ redis:
     port: 6379
   auth:
     enabled: true
-    password: ChangeMe!
+    password: "" # Supplied by generated/existing Secret
     # Existing secret holding the password, used instead of password.
     existingSecret: ""
     existingSecretPasswordKey: redis-password
@@ -348,10 +359,10 @@ timescaledb:
     repository: timescale/timescaledb
     tag: latest-pg16
   user: postgres
-  password: ChangeMe!
+  password: "" # Supplied by generated/existing Secret
   billing_database: c8oAnalytics
   billing_user: c8oAnalytics
-  billing_password: c8oAnalytics
+  billing_password: "" # Supplied by generated/existing Secret
   br_user: 
   persistentVolume:
     # adapt the storage class to your environment
@@ -369,8 +380,14 @@ timescaledb:
 
 # ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
 baserow:
+  admin:
+    email: admin@convertigo.com
+    name: Platform administrator
+    existingSecret: ""
+    passwordKey: baserow-admin-password
+    allowPublicSignup: false
   existingSecret: ""
-  existingSecretPasswordKey: database-password
+  existingSecretPasswordKey: baserow-database-password
   enabled: true
   image:
     repository: baserow/baserow
@@ -379,7 +396,7 @@ baserow:
     tag: 1.34.5
   baserow_db : baserow
   baserow_user: baserow
-  baserow_password: N0Passworw0rd
+  baserow_password: "" # Supplied by generated/existing Secret
   baserow_public_url: ""
   plugins:
     # C8oForms plugin of Baserow (backend only): whole-table SQL aggregations under /api/c8o/ for No Code Studio,
@@ -412,13 +429,13 @@ couchdb:
   existingSecret: ""
   existingSecretNamespace: ""
   existingSecretUsernameKey: ""
-  existingSecretPasswordKey: ""
+  existingSecretPasswordKey: couchdb-password
   existingSecretOptional: false
   image:
     repository: couchdb
     tag: "3.5"
   admin: admin
-  password: fullsyncpassword
+  password: "" # Supplied by generated/existing Secret
   persistentVolume:
     # adapt the storage class to your environment
     storageClass: ebs-sc

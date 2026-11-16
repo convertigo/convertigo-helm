@@ -46,27 +46,19 @@ spec:
           - name: PGDATA
             value: /var/lib/postgresql/data/pgdata
           - name: POSTGRES_PASSWORD
-            {{- if .Values.timescaledb.existingSecret }}
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.timescaledb.existingSecret }}
+                name: {{ include "convertigo.timescaleSecretName" . }}
                 key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
-            {{- else }}
-            value: {{ .Values.timescaledb.password | quote }}
-            {{- end }}
           - name: POSTGRES_USER
             value: "{{ .Values.timescaledb.user }}"
           - name: BILLING_DB
             value: "{{ .Values.timescaledb.billing_database }}"
           - name: BILLING_PASSWORD
-            {{- if .Values.timescaledb.existingSecret }}
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.timescaledb.existingSecret }}
+                name: {{ include "convertigo.timescaleSecretName" . }}
                 key: {{ default "billing-password" .Values.timescaledb.existingSecretBillingPasswordKey }}
-            {{- else }}
-            value: {{ .Values.timescaledb.billing_password | quote }}
-            {{- end }}
           - name: BILLING_USER
             value: "{{ .Values.timescaledb.billing_user }}"
           - name: BASEROW_DB
@@ -74,14 +66,10 @@ spec:
           - name: BASEROW_USER
             value: "{{ .Values.baserow.baserow_user }}"
           - name: BASEROW_PASSWORD
-            {{- if .Values.baserow.existingSecret }}
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.baserow.existingSecret }}
-                key: {{ default "database-password" .Values.baserow.existingSecretPasswordKey }}
-            {{- else }}
-            value: {{ .Values.baserow.baserow_password | quote }}
-            {{- end }}
+                name: {{ include "convertigo.baserowDatabaseSecretName" . }}
+                key: {{ default "baserow-database-password" .Values.baserow.existingSecretPasswordKey }}
 
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

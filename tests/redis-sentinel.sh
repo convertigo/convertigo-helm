@@ -69,10 +69,11 @@ expect_option '-Dconvertigo.engine.session.redis.sentinel.nodes=ha-convertigo-re
 [[ "$rendered" != *"-Dconvertigo.engine.session.redis.host="* ]]
 # The single Redis is not rendered
 [[ "$rendered" != *'"--appendonly"'* ]]
-# Password from an existing secret: never rendered, expanded by Kubernetes
+# Password from an existing Secret: mounted only in the engine init and referenced by Redis pods
 rendered=$(helm template ha "$chart" "${embedded[@]}" --set redis.auth.existingSecret=redis-auth)
 expect_option 'name: redis-auth'
-expect_option '-Dconvertigo.engine.session.redis.password=$(REDIS_PASSWORD)'
+expect_option 'path: redis-password'
+[[ "$rendered" != *'-Dconvertigo.engine.session.redis.password=$(REDIS_PASSWORD)'* ]]
 [[ "$rendered" != *"ChangeMe!"*"session.redis.password"* && "$rendered" != *"session.redis.password=ChangeMe!"* ]]
 # Password and TLS files provided by user volumes (Vault agent)
 rendered=$(helm template ha "$chart" "${embedded[@]}" --set redis.auth.passwordFile=/vault/secrets/redis-password \

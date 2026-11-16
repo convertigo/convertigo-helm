@@ -5,6 +5,10 @@ publicAddr: demo.example.com
 ssl_only: "true"
 progressDeadlineSeconds: 1800
 
+credentials:
+  existingSecret: platform-installation
+  adoptExisting: false
+
 admin:
   existingSecret: platform-admin
   passwordKey: password

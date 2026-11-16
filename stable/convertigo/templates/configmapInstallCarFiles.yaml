@@ -43,6 +43,23 @@ data:
       done
     }
     ADMIN_SECRET_FILE="${ADMIN_SECRET_FILE:-/run/convertigo-admin/password}"
+    export BOOTSTRAP_CRYPTO_COMPATIBLE="{{ if (.Values.crypto | default dict).engineCompatibilityConfirmed }}true{{ else }}false{{ end }}"
+    export WORKSPACE
+    export BOOTSTRAP_ADOPT_EXISTING="{{ if (.Values.credentials | default dict).adoptExisting }}true{{ else }}false{{ end }}"
+    export BOOTSTRAP_COUCH_USER={{ .Values.couchdb.admin | quote }}
+    export BOOTSTRAP_BASEROW_EMAIL={{ default "admin@convertigo.com" (.Values.baserow.admin | default dict).email | quote }}
+    export BOOTSTRAP_REDIS_PASSWORD="{{ if and .Values.redis.enabled .Values.redis.auth.enabled (not .Values.redis.auth.passwordFile) }}true{{ else }}false{{ end }}"
+    CLASSPATH=""
+    for jar in "${CATALINA_HOME:-/usr/local/tomcat}"/webapps/convertigo/WEB-INF/lib/*.jar; do
+      CLASSPATH="${CLASSPATH:+$CLASSPATH:}$jar"
+    done
+    initialize_credentials() {
+      java -Xmx256m --class-path "$CLASSPATH" "${CREDENTIAL_BOOTSTRAP_SOURCE:-/bootstrap/InitializeWorkspace.java}" "$1" > "$STAGE/credential-init.log" 2>&1 || {
+        echo "Workspace credential initialization requires private review" >&2
+        exit 1
+      }
+    }
+    initialize_credentials prepare
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
     if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
@@ -53,8 +70,6 @@ data:
     lib_baserow.https=false
     lib_baserow.port=8000
     lib_baserow.server={{ include "convertigo.fullname" . }}-br
-    lib_baserow.adminuser=admin@convertigo.com
-    lib_baserow.password.secret=x701301a25336f85870cef65c4c7b4b1b56fd1ac5c3496db716f30ea60a29ebea
 
     C8Oforms.EnableProductTour=false
     C8Oforms.hideConvertigoLogin=false
@@ -65,17 +80,14 @@ data:
     C8Oforms.maxThreads=20
 
     C8OBilling.database={{ include "convertigo.fullname" . }}-timescaledb
-    C8OBilling.password.secret=x446e80f253299d272a9a67561864df2a
     C8OBilling.user={{ .Values.timescaledb.billing_user }}
 
-    lib.actions.c8oforms.smtp.password.secret=xd8e180806a1c1d83a6255212121ab827
     lib.actions.c8oforms.smtp.port=587
     lib.actions.c8oforms.smtp.security=Basic
     lib.actions.c8oforms.smtp.sender=Convertigo Forms Builder <noreply@convertigo.com>
     lib.actions.c8oforms.smtp.server=smtp-relay.brevo.com
     lib.actions.c8oforms.smtp.user=
     lib.actions.c8oforms.sql.host=
-    lib.actions.c8oforms.sql.password.secret=xd8e180806a1c1d83a6255212121ab827
     lib.actions.c8oforms.sql.port=
     lib.actions.c8oforms.sql.pwd=
     lib.actions.c8oforms.sql.user=
@@ -87,13 +99,9 @@ data:
     lib_oauth.azuread.clientid=
     lib_oauth.azuread.tenantid=common
     lib_oauth.github.clientid=
-    lib_oauth.github.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.google.clientid=
-    lib_oauth.google.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.linkedin.clientid=
-    lib_oauth.linkedin.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.openid.clientid=
-    lib_oauth.openid.clientsecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.openid.instrospect_url=
     lib_producttour.weglot_api_key=
     EOF
@@ -135,6 +143,7 @@ data:
     chmod 600 "$PROPERTIES"
     unset EXISTING_HASH DEFAULT_HASH
     unset ADMIN_HASH
+    initialize_credentials symbols
     # Always repair legacy/interrupted root-owned files, even when projects already exist.
     if [[ $(id -u) == 0 ]]; then
       find "$PROJECTS_DIR" "$CONFIG_DIR" -xdev \( ! -uid "$OWNER_UID" -o ! -gid "$OWNER_GID" \) -exec chown -h "$OWNER_UID:$OWNER_GID" {} +

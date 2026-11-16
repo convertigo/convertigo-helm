@@ -24,6 +24,7 @@ spec:
   template:
     metadata:
       annotations:
+        checksum/credential-bootstrap: {{ include (print $.Template.BasePath "/credential-bootstrap-configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -61,6 +62,47 @@ spec:
             items:
               - key: {{ default "password" (.Values.admin | default dict).passwordKey }}
                 path: password
+        - name: credential-bootstrap
+          configMap:
+            name: {{ include "convertigo.fullname" . }}-credential-bootstrap
+        - name: installation-credentials
+          projected:
+            defaultMode: 0444
+            sources:
+              - secret:
+                  name: {{ include "convertigo.cryptoSecretName" . }}
+                  optional: true
+                  items:
+                    - key: {{ default "crypto-passphrase" (.Values.crypto | default dict).passphraseKey }}
+                      path: crypto-passphrase
+              - secret:
+                  name: {{ include "convertigo.baserowAdminSecretName" . }}
+                  items:
+                    - key: {{ default "baserow-admin-password" (.Values.baserow.admin | default dict).passwordKey }}
+                      path: baserow-admin-password
+              - secret:
+                  name: {{ include "convertigo.timescaleSecretName" . }}
+                  items:
+                    - key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
+                      path: postgres-password
+                    - key: {{ default "billing-password" .Values.timescaledb.existingSecretBillingPasswordKey }}
+                      path: billing-password
+              - secret:
+                  name: {{ include "convertigo.couchSecretName" . }}
+                  items:
+                    - key: {{ default "couchdb-password" .Values.couchdb.existingSecretPasswordKey }}
+                      path: couchdb-password
+                    {{- if .Values.couchdb.existingSecretUsernameKey }}
+                    - key: {{ .Values.couchdb.existingSecretUsernameKey }}
+                      path: couchdb-username
+                    {{- end }}
+              {{- if and .Values.redis.enabled .Values.redis.auth.enabled (not .Values.redis.auth.passwordFile) }}
+              - secret:
+                  name: {{ include "convertigo.redisSecretName" . }}
+                  items:
+                    - key: {{ default "redis-password" .Values.redis.auth.existingSecretPasswordKey }}
+                      path: redis-password
+              {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           {{- if $redisPasswordFile }}
@@ -86,16 +128,6 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
-            {{- if $embeddedRedis }}
-            {{- include "convertigo.redisPasswordEnv" . | trim | nindent 12 }}
-            {{- end }}
-            {{- if .Values.timescaledb.existingSecret }}
-            - name: TIMESCALE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.timescaledb.existingSecret }}
-                  key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
-            {{- end }}
             - name: JAVA_OPTS
               value: {{ include "convertigo.javaOpts" . | quote }}
             - name: JXMX
@@ -188,6 +220,12 @@ spec:
               readOnly: true
             - name: admin-credential
               mountPath: /run/convertigo-admin
+              readOnly: true
+            - name: installation-credentials
+              mountPath: /run/convertigo-installation
+              readOnly: true
+            - name: credential-bootstrap
+              mountPath: /bootstrap
               readOnly: true
         {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 8 }}

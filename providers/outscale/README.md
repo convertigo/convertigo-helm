@@ -17,11 +17,9 @@ RWX setup and not a highly available storage service.
   `platform-admin` (`password`), `platform-redis` (`redis-password`), `platform-couchdb`
   (`username`, `password`), and `platform-database` (`postgres-password`, `billing-password`,
   `baserow-password`). Password file bytes must not include an unintended trailing newline.
-  These are example names, not pre-existing credentials.
-
-For an offline render only, add `--set couchdb.existingSecretOptional=true`: the legacy CouchDB
-helper otherwise requires a live Secret lookup. Never deploy that validation-only override; this
-patch does not change that existing lookup behavior or qualify a live Secret.
+  Also provide `platform-installation` (`crypto-passphrase`, `baserow-admin-password`).
+  These are example names, not pre-existing credentials. A new passphrase requires a qualified engine
+  and explicit `crypto.engineCompatibilityConfirmed=true`; it is not enabled by this example.
 
 Render and lint locally before any installation, using `values.yaml`. Replace the example hostname,
 classes and Secret names. The chart metadata remains on the current published engine version until
@@ -97,3 +95,9 @@ cold RWX start, permission repair and interruption/retry on an isolated environm
 run a failover or kill production pods merely to validate this guide. Revert to the previous chart
 and values if required; do not restore or delete persistent data automatically. Reverting a chart
 does not undo database/project migrations or a credential change: plan those steps separately.
+
+
+Before upgrading an older installation, follow `../../docs/installation-credentials.md` and retain its
+current effective passphrase. `credentials.adoptExisting` is not a rotation operation and must only
+be enabled after an approved private inventory and matching Secret preparation. Never generate new
+database passwords for existing PVCs as part of a routine chart upgrade.

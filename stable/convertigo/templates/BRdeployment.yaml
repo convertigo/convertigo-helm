@@ -17,10 +17,11 @@ spec:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-br
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+        checksum/credential-bootstrap: {{ include (print $.Template.BasePath "/credential-bootstrap-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}-br
     spec:
@@ -42,6 +43,44 @@ spec:
         - name: br-plugins
           emptyDir: {}
         {{- end }}
+        - name: credential-bootstrap
+          configMap:
+            name: {{ include "convertigo.fullname" . }}-credential-bootstrap
+        - name: baserow-admin
+          secret:
+            secretName: {{ include "convertigo.baserowAdminSecretName" . }}
+            defaultMode: 0444
+            items:
+              - key: {{ default "baserow-admin-password" (.Values.baserow.admin | default dict).passwordKey }}
+                path: password
+      initContainers:
+        - name: baserow-setup
+          image: {{ .Values.baserow.image.repository }}:{{ .Values.baserow.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/bash", "/bootstrap/baserow-init.sh"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            {{- include "convertigo.baserowDatabaseEnv" . | nindent 12 }}
+            - name: BOOTSTRAP_BASEROW_EMAIL
+              value: {{ default "admin@convertigo.com" (.Values.baserow.admin | default dict).email | quote }}
+            - name: BOOTSTRAP_BASEROW_NAME
+              value: {{ default "Platform administrator" (.Values.baserow.admin | default dict).name | quote }}
+            - name: BOOTSTRAP_ADOPT_EXISTING
+              value: {{ ternary "true" "false" (dig "adoptExisting" false (.Values.credentials | default dict)) | quote }}
+            - name: BOOTSTRAP_PUBLIC_SIGNUP
+              value: {{ ternary "true" "false" (dig "allowPublicSignup" false (.Values.baserow.admin | default dict)) | quote }}
+          volumeMounts:
+            - name: br-data
+              mountPath: /baserow/data
+            - name: credential-bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+            - name: baserow-admin
+              mountPath: /run/baserow-admin
+              readOnly: true
+          resources:
+            {{- toYaml .Values.baserow.resources | nindent 12 }}
       containers:
         - name: {{ .Chart.Name }}-br
           command: ["/bin/sh", "-c", "sed -i -e s,127.0.0.1,0.0.0.0, /baserow/supervisor/default_baserow_env.sh && /baserow.sh start"]
@@ -59,27 +98,9 @@ spec:
               readOnly: true
             {{- end }}
           env:
-            - name: BASEROW_PUBLIC_URL
-              value: {{ include "convertigo.baserowPublicUrl" . | quote }}
+            {{- include "convertigo.baserowDatabaseEnv" . | nindent 12 }}
             - name: BASEROW_EXTRA_ALLOWED_HOSTS
               value: "*"
-            - name: DATABASE_HOST
-              value: {{ include "convertigo.fullname" . }}-timescaledb
-            - name: DATABASE_PORT
-              value: "5432"
-            - name: DATABASE_NAME
-              value: {{ .Values.baserow.baserow_db }}
-            - name: DATABASE_USER
-              value: {{ .Values.baserow.baserow_user }}
-            - name: DATABASE_PASSWORD
-              {{- if .Values.baserow.existingSecret }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.baserow.existingSecret }}
-                  key: {{ default "database-password" .Values.baserow.existingSecretPasswordKey }}
-              {{- else }}
-              value: {{ .Values.baserow.baserow_password | quote }}
-              {{- end }}
             {{- if $c8oforms.enabled }}
             # Next to the mount: a container with the variable and without the file does not start.
             - name: BASEROW_PLUGIN_URLS

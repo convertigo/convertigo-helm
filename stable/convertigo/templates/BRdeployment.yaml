@@ -17,7 +17,7 @@ spec:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-br
   template:
     metadata:
-      {{- with .Values.podAnnotations }}-br
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -72,7 +72,14 @@ spec:
             - name: DATABASE_USER
               value: {{ .Values.baserow.baserow_user }}
             - name: DATABASE_PASSWORD
-              value: {{ .Values.baserow.baserow_password }}
+              {{- if .Values.baserow.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.baserow.existingSecret }}
+                  key: {{ default "database-password" .Values.baserow.existingSecretPasswordKey }}
+              {{- else }}
+              value: {{ .Values.baserow.baserow_password | quote }}
+              {{- end }}
             {{- if $c8oforms.enabled }}
             # Next to the mount: a container with the variable and without the file does not start.
             - name: BASEROW_PLUGIN_URLS

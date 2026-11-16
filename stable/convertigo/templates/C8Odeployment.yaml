@@ -23,10 +23,11 @@ spec:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+        checksum/workspace-installer: {{ include (print $.Template.BasePath "/configmapInstallCarFiles.yaml") . | sha256sum }}
       labels:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}
     spec:
@@ -41,10 +42,10 @@ spec:
         - name: c8o-workspace
           persistentVolumeClaim:
             claimName: {{ include "convertigo.fullname" . }}-c8o-workspace
-        - name: c8o-install-car-files
+        - name: {{ include "convertigo.fullname" . }}-workspace-setup
           configMap:
-              name: c8o-install-car-files
-              defaultMode: 0777
+              name: {{ include "convertigo.fullname" . }}-workspace-setup
+              defaultMode: 0555
         {{- if $embeddedRedisTls }}
         - name: redis-tls
           secret:
@@ -53,13 +54,20 @@ spec:
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        - name: admin-credential
+          secret:
+            secretName: {{ include "convertigo.adminSecretName" . }}
+            defaultMode: 0444
+            items:
+              - key: {{ default "password" (.Values.admin | default dict).passwordKey }}
+                path: password
       containers:
         - name: {{ .Chart.Name }}
           {{- if $redisPasswordFile }}
           {{- /* The password file can be written by a sidecar (Vault agent) after the container starts */}}
-          command: ["/bin/sh", "-c", "i=0; while [ ! -s \"$REDIS_PASSWORD_FILE\" ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; export JAVA_OPTS=\"$JAVA_OPTS -Dconvertigo.engine.session.redis.password=$(cat \"$REDIS_PASSWORD_FILE\")\"; /home/convertigo/scripts/installCarFiles.sh && exec /docker-entrypoint.sh convertigo"]
+          command: ["/bin/sh", "-c", "i=0; while [ ! -s \"$REDIS_PASSWORD_FILE\" ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; export JAVA_OPTS=\"$JAVA_OPTS -Dconvertigo.engine.session.redis.password=$(cat \"$REDIS_PASSWORD_FILE\")\"; exec /docker-entrypoint.sh convertigo"]
           {{- else }}
-          command: ["/bin/sh", "-c", "/home/convertigo/scripts/installCarFiles.sh && exec /docker-entrypoint.sh convertigo"]
+          command: ["/bin/sh", "-c", "exec /docker-entrypoint.sh convertigo"]
           {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -67,7 +75,7 @@ spec:
           volumeMounts:
             - name: c8o-workspace
               mountPath: /workspace
-            - name: c8o-install-car-files
+            - name: {{ include "convertigo.fullname" . }}-workspace-setup
               mountPath: /home/convertigo/scripts
             {{- if $embeddedRedisTls }}
             - name: redis-tls
@@ -80,6 +88,13 @@ spec:
           env:
             {{- if $embeddedRedis }}
             {{- include "convertigo.redisPasswordEnv" . | trim | nindent 12 }}
+            {{- end }}
+            {{- if .Values.timescaledb.existingSecret }}
+            - name: TIMESCALE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.timescaledb.existingSecret }}
+                  key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
             {{- end }}
             - name: JAVA_OPTS
               value: {{ include "convertigo.javaOpts" . | quote }}
@@ -132,6 +147,16 @@ spec:
             successThreshold: {{ .Values.readinessProbe.successThreshold }}
           {{- end }}
 
+          {{- $startup := .Values.startupProbe | default dict }}
+          {{- if dig "enabled" true $startup }}
+          startupProbe:
+            exec:
+              command: {{ toJson (default (list "sh" "-c" "s=$(curl -fsS --max-time 5 http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.projects=KO'") ($startup.exec | default dict).command) }}
+            periodSeconds: {{ default 10 $startup.periodSeconds }}
+            timeoutSeconds: {{ default 6 $startup.timeoutSeconds }}
+            failureThreshold: {{ default 60 $startup.failureThreshold }}
+          {{- end }}
+
           {{- /* Liveness probe */}}
           livenessProbe:
             httpGet:
@@ -144,29 +169,30 @@ spec:
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if or $workspaceOwnershipInitEnabled .Values.extraInitContainers }}
       initContainers:
+        - name: workspace-setup
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/bash", "/home/convertigo/scripts/installCarFiles.sh"]
+          securityContext:
+            runAsUser: {{ ternary 0 (include "convertigo.runAsUserId" . | int) $workspaceOwnershipInitEnabled }}
+            runAsGroup: {{ include "convertigo.runAsGroupId" . }}
+            allowPrivilegeEscalation: false
+          resources:
+            {{- toYaml ((.Values.projectInstallation | default dict).resources | default dict) | nindent 12 }}
+          volumeMounts:
+            - name: c8o-workspace
+              mountPath: /workspace
+            - name: c8o-install-car-files
+              mountPath: /home/convertigo/scripts
+              readOnly: true
+            - name: admin-credential
+              mountPath: /run/convertigo-admin
+              readOnly: true
         {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if $workspaceOwnershipInitEnabled }}
-        - command:
-          - 'sh'
-          - '-c'
-          - 'chown {{ template "convertigo.runAsUserId" . }}:{{ template "convertigo.runAsGroupId" . }} /workspace || true'
-          image: busybox
-          imagePullPolicy: Always
-          name: volume-mount-hack
-          securityContext: 
-            runAsUser: 0
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-          volumeMounts:
-              - name: c8o-workspace
-                mountPath: /workspace
-        {{- end }}
-      {{- end }}
-      
+
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

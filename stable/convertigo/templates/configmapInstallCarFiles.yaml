@@ -1,26 +1,54 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: c8o-install-car-files
+  name: {{ include "convertigo.fullname" . }}-workspace-setup
 data:
   installCarFiles.sh: |
     #!/bin/bash
-    set -e
-    set -o pipefail
-
-    WORKSPACE="/workspace"
+    set -euo pipefail
+    umask 077
+    WORKSPACE="${WORKSPACE:-/workspace}"
     PROJECTS_DIR="$WORKSPACE/projects"
     CONFIG_DIR="$WORKSPACE/configuration"
-    BASEROW_DIR="$PROJECTS_DIR/BaserowIntegration"
+    OWNER_UID={{ include "convertigo.runAsUserId" . }}
+    OWNER_GID={{ include "convertigo.runAsGroupId" . }}
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
     NOCODESTUDIO_ENABLED="{{ if .Values.nocodestudio.enable }}true{{ else }}false{{ end }}"
-
+    INSTALL_ENABLED="{{ dig "enabled" true (.Values.projectInstallation | default dict) }}"
+    METERING_ENABLED="{{ dig "enabled" false (.Values.awsMarketplace | default dict) }}"
+    command -v flock >/dev/null || { echo "Workspace setup requires flock" >&2; exit 1; }
+    if [[ $(id -u) == 0 ]]; then
+      chown "$OWNER_UID:$OWNER_GID" "$WORKSPACE"
+    fi
+    touch "$WORKSPACE/.chart-install.lock"
+    if [[ $(id -u) == 0 ]]; then
+      chown "$OWNER_UID:$OWNER_GID" "$WORKSPACE/.chart-install.lock"
+      chmod 660 "$WORKSPACE/.chart-install.lock"
+    fi
+    exec 9<>"$WORKSPACE/.chart-install.lock"
+    flock -x -w {{ default 900 (.Values.projectInstallation | default dict).lockTimeoutSeconds }} 9
+    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
+    STAGE=$(mktemp -d "$WORKSPACE/.chart-install.XXXXXX")
+    trap 'rm -rf -- "$STAGE"' EXIT
+    MARKER="$WORKSPACE/.chart-install-complete"
+    SIGNATURE="v2:nocode=$NOCODESTUDIO_ENABLED:{{ .Values.nocodestudio.version }}:install=$INSTALL_ENABLED:metering=$METERING_ENABLED"
+    # Existing projects remain intact. Only complete, staged project directories are published.
+    publish_projects() {
+      local project
+      for project in "$STAGE/projects/"*; do
+        [[ -d "$project" ]] || continue
+        if [[ ! -e "$PROJECTS_DIR/$(basename "$project")" ]]; then
+          mv -- "$project" "$PROJECTS_DIR/"
+        fi
+      done
+    }
+    ADMIN_SECRET_FILE="${ADMIN_SECRET_FILE:-/run/convertigo-admin/password}"
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
     if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
         echo "No Symbols found, generating Symbols"
         mkdir -p "$CONFIG_DIR"
-        cat > "$GLOBAL_SYMBOLS" << EOF
+        cat > "$STAGE/global_symbols.properties" << EOF
     C8Oforms.baserow.iframe={{ include "convertigo.publicUrl" . }}/convertigo/projects/BaserowIntegration/c8o/
     lib_baserow.https=false
     lib_baserow.port=8000
@@ -69,56 +97,49 @@ data:
     lib_oauth.openid.instrospect_url=
     lib_producttour.weglot_api_key=
     EOF
+        mv -- "$STAGE/global_symbols.properties" "$GLOBAL_SYMBOLS"
     fi
 
-    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" ]]; then
-        if [[ "$BASEROW_ENABLED" == "true" ]]; then
-            if [[ -d "$BASEROW_DIR" ]]; then
-                echo "Installation already exists. Skipping setup."
-                exit 0
-            fi
-        else
-            echo "Installation already exists (Baserow disabled). Skipping setup."
-            exit 0
-        fi
+
+    if [[ "$INSTALL_ENABLED" == true && "$(cat "$MARKER" 2>/dev/null || true)" != "$SIGNATURE" ]]; then
+      mkdir -p "$STAGE/projects"
+      if [[ "$NOCODESTUDIO_ENABLED" == true ]]; then
+        curl --fail --location --retry 3 https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz -o "$STAGE/forms.tar.gz"
+        tar xzf "$STAGE/forms.tar.gz" --no-same-owner --strip-components=4 -C "$STAGE/projects" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
+        publish_projects
+      fi
+      if [[ "$METERING_ENABLED" == true && ! -d "$PROJECTS_DIR/AwsMetering" ]]; then
+        curl --fail --location --retry 3 https://github.com/convertigo/c8oprj-aws-metering/archive/refs/heads/master.zip -o "$STAGE/metering.zip"
+        unzip -q "$STAGE/metering.zip" -d "$STAGE/metering"
+        mv -- "$STAGE/metering/c8oprj-aws-metering-master" "$PROJECTS_DIR/AwsMetering"
+      fi
     fi
-
-    # Ensure required directories exist
-
-    echo "Installing Convertigo projects from GitHub, be sure you have access to the internet"
-    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
-
-    if [[ "$NOCODESTUDIO_ENABLED" == "true" ]]; then
-        curl -L https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz | \
-            tar xvz --no-same-owner --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
-    else
-        echo "No Code Studio disabled (nocodestudio.enable=false). Skipping C8oForms installation."
+    # The Secret is visible to this init only. Store the hash, never a JVM option or environment value.
+    test -s "$ADMIN_SECRET_FILE" || { echo "Admin credential file is empty" >&2; exit 1; }
+    ADMIN_HASH=$(sha512sum < "$ADMIN_SECRET_FILE" | cut -d ' ' -f1)
+    PROPERTIES="$CONFIG_DIR/engine.properties"
+    # A newly generated Secret must not replace a previously customized admin account.
+    EXISTING_HASH=$(awk '/^[[:space:]]*admin[.]password[[:space:]]*[=:]/{sub(/^[[:space:]]*admin[.]password[[:space:]]*[=:][[:space:]]*/, ""); print; exit}' "$PROPERTIES" 2>/dev/null || true)
+    DEFAULT_HASH=$(printf admin | sha512sum | cut -d ' ' -f1)
+    FORCE_ADMIN="{{ if (.Values.admin | default dict).existingSecret }}true{{ else }}false{{ end }}"
+    if [[ "$FORCE_ADMIN" == true || -z "$EXISTING_HASH" || "$EXISTING_HASH" == "$DEFAULT_HASH" || "$EXISTING_HASH" == 92668751 ]]; then
+      if [[ -f "$PROPERTIES" ]]; then
+        awk '!/^[[:space:]]*admin[.](username|password)[[:space:]]*[=:]/ && !/^[[:space:]]*anonymous[.]dashboard[[:space:]]*[=:]/' "$PROPERTIES" > "$STAGE/engine.properties"
+      else
+        : > "$STAGE/engine.properties"
+      fi
+      printf '\nadmin.username=%s\nadmin.password=%s\nanonymous.dashboard=false\n' '{{ default "admin" (.Values.admin | default dict).username }}' "$ADMIN_HASH" >> "$STAGE/engine.properties"
+      chmod 600 "$STAGE/engine.properties"
+      mv -- "$STAGE/engine.properties" "$PROPERTIES"
     fi
-
-    if curl --connect-timeout 1 -s http://169.254.169.254/latest/meta-data/ >/dev/null; then
-        echo "This is an AWS EC2 instance" 
-        DEST_DIR="$PROJECTS_DIR/AwsMetering"
-        TMP_DIR=$(mktemp -d)
-        ZIP_URL="https://github.com/convertigo/c8oprj-aws-metering/archive/refs/heads/master.zip"
-
-        mkdir -p "$DEST_DIR"
-        curl -L "$ZIP_URL" -o "$TMP_DIR/archive.zip"
-        unzip "$TMP_DIR/archive.zip" -d "$TMP_DIR"
-        EXTRACTED_DIR=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d)
-        cp -R "$EXTRACTED_DIR/"* "$DEST_DIR/"
-        rm -rf "$TMP_DIR"
+    chmod 600 "$PROPERTIES"
+    unset EXISTING_HASH DEFAULT_HASH
+    unset ADMIN_HASH
+    # Always repair legacy/interrupted root-owned files, even when projects already exist.
+    if [[ $(id -u) == 0 ]]; then
+      find "$PROJECTS_DIR" "$CONFIG_DIR" -xdev \( ! -uid "$OWNER_UID" -o ! -gid "$OWNER_GID" \) -exec chown -h "$OWNER_UID:$OWNER_GID" {} +
     fi
-
-    # Root installations hand these files to the Convertigo user. An arbitrary
-    # non-root UID keeps the existing ownership and relies on volume permissions.
-    if [[ $(id -u) == "0" ]]; then
-        if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
-            chown -R convertigo:convertigo "$PROJECTS_DIR"
-        fi
-
-        if [[ $(stat -c "%U" "$CONFIG_DIR") != "convertigo" ]]; then
-            chown -R convertigo:convertigo "$CONFIG_DIR"
-        fi
-    fi
-
-    echo "Setup completed successfully!"
+    printf '%s\n' "$SIGNATURE" > "$STAGE/complete"
+    if [[ $(id -u) == 0 ]]; then chown "$OWNER_UID:$OWNER_GID" "$STAGE/complete"; fi
+    mv -- "$STAGE/complete" "$MARKER"
+    echo "Workspace setup completed"

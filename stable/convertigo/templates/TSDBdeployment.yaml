@@ -6,13 +6,15 @@ metadata:
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}-timescaledb
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-timescaledb
   template:
     metadata:
-      {{- with .Values.podAnnotations }}-timescaledb
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -44,13 +46,27 @@ spec:
           - name: PGDATA
             value: /var/lib/postgresql/data/pgdata
           - name: POSTGRES_PASSWORD
-            value: "{{ .Values.timescaledb.password }}"
+            {{- if .Values.timescaledb.existingSecret }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.timescaledb.existingSecret }}
+                key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
+            {{- else }}
+            value: {{ .Values.timescaledb.password | quote }}
+            {{- end }}
           - name: POSTGRES_USER
             value: "{{ .Values.timescaledb.user }}"
           - name: BILLING_DB
             value: "{{ .Values.timescaledb.billing_database }}"
           - name: BILLING_PASSWORD
-            value: "{{ .Values.timescaledb.billing_password }}"
+            {{- if .Values.timescaledb.existingSecret }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.timescaledb.existingSecret }}
+                key: {{ default "billing-password" .Values.timescaledb.existingSecretBillingPasswordKey }}
+            {{- else }}
+            value: {{ .Values.timescaledb.billing_password | quote }}
+            {{- end }}
           - name: BILLING_USER
             value: "{{ .Values.timescaledb.billing_user }}"
           - name: BASEROW_DB
@@ -58,7 +74,14 @@ spec:
           - name: BASEROW_USER
             value: "{{ .Values.baserow.baserow_user }}"
           - name: BASEROW_PASSWORD
-            value: "{{ .Values.baserow.baserow_password }}"
+            {{- if .Values.baserow.existingSecret }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.baserow.existingSecret }}
+                key: {{ default "database-password" .Values.baserow.existingSecretPasswordKey }}
+            {{- else }}
+            value: {{ .Values.baserow.baserow_password | quote }}
+            {{- end }}
 
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

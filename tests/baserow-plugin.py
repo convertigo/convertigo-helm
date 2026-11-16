@@ -18,11 +18,11 @@ config_map = 'plugin-convertigo-c8oforms-' + lock['sha256'][:16]
 
 
 def render(*options, chart_dir=chart):
-    return subprocess.check_output(['helm', 'template', 'plugin', str(chart_dir), *options], text=True)
+    return subprocess.check_output(['helm', 'template', 'plugin', str(chart_dir), '--set', 'admin.existingSecret=render-admin', *options], text=True)
 
 
 def failure(*options, chart_dir=chart):
-    result = subprocess.run(['helm', 'template', 'plugin', str(chart_dir), *options], text=True, capture_output=True)
+    result = subprocess.run(['helm', 'template', 'plugin', str(chart_dir), '--set', 'admin.existingSecret=render-admin', *options], text=True, capture_output=True)
     assert result.returncode != 0, 'Invalid configuration was accepted: %s' % (options,)
     return result.stderr
 

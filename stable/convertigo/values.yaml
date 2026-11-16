@@ -8,7 +8,7 @@ replicaCount: 1
 
 # Seconds a rollout can wait for new pods to become ready before Kubernetes reports it as failed
 # (Kubernetes default: 600). Raise it when a new pod may wait long for Redis (network convergence).
-progressDeadlineSeconds: ""
+progressDeadlineSeconds: 1800
 
 rootRedirect: /convertigo/
 
@@ -26,6 +26,31 @@ image:
 nocodestudio:
     enable: true
     version: "2.1.14"
+
+# The generated credential is kept across upgrades. Prefer an existing Secret in production.
+admin:
+  username: admin
+  existingSecret: ""
+  passwordKey: password
+
+# Installation completes before Tomcat starts. The workspace driver must support flock across nodes.
+projectInstallation:
+  enabled: true
+  lockTimeoutSeconds: 900
+  resources: {}
+
+# Explicit opt-in; metadata endpoints are also implemented by other cloud providers.
+awsMarketplace:
+  enabled: false
+
+# Gates liveness/readiness while the engine loads or migrates projects (up to 10 minutes).
+startupProbe:
+  enabled: true
+  exec:
+    command: ["sh", "-c", "s=$(curl -fsS --max-time 5 http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.projects=KO'"]
+  periodSeconds: 10
+  timeoutSeconds: 6
+  failureThreshold: 60
 
 imagePullSecrets: []
 nameOverride: ""
@@ -57,11 +82,9 @@ serviceAccount:
 
 podAnnotations: {}
 
-# Root init container that prepares the ownership of /workspace. Keep enabled for
-# compatibility; disable when the volume is already writable by the runtime UID,
-# or when the storage driver supports permission management with fsGroup.
-# Restricted clusters must disable it and configure non-root security contexts.
-# This switch only controls the built-in init container, not extraInitContainers.
+# The workspace init runs as root and repairs project/configuration ownership under its lock.
+# Disable on pre-owned/root-squashed volumes: it then runs as the runtime UID/GID.
+# No permission widening is performed; the storage driver must allow writes by that identity.
 workspaceOwnershipInit:
   enabled: true
 
@@ -317,6 +340,9 @@ livenessProbe:
 
 # ====== timescaledb ========== This will be used to hold NoCode database and metrics data usage is mandatory ====
 timescaledb:
+  existingSecret: ""
+  existingSecretPasswordKey: postgres-password
+  existingSecretBillingPasswordKey: billing-password
   enabled: true
   image:
     repository: timescale/timescaledb
@@ -343,6 +369,8 @@ timescaledb:
 
 # ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
 baserow:
+  existingSecret: ""
+  existingSecretPasswordKey: database-password
   enabled: true
   image:
     repository: baserow/baserow

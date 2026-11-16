@@ -65,14 +65,18 @@ Create the name of the service account to use
 get run as user id
 */}}
 {{ define "convertigo.runAsUserId"}}
-{{- if .Values.podSecurityContext.runAsUser }}{{ .Values.podSecurityContext.runAsUser }}{{- else }}1000{{- end }}
+{{- $container := .Values.securityContext | default dict -}}
+{{- $pod := .Values.podSecurityContext | default dict -}}
+{{- if $container.runAsUser }}{{ $container.runAsUser }}{{- else if $pod.runAsUser }}{{ $pod.runAsUser }}{{- else }}1000{{- end }}
 {{- end }}
 
 {{/*
 get run as group id
 */}}
 {{ define "convertigo.runAsGroupId"}}
-{{- if .Values.podSecurityContext.fsGroup }}{{ .Values.podSecurityContext.fsGroup }}{{- else }}{{ template "convertigo.runAsUserId" . }}{{- end }}
+{{- $container := .Values.securityContext | default dict -}}
+{{- $pod := .Values.podSecurityContext | default dict -}}
+{{- if $container.runAsGroup }}{{ $container.runAsGroup }}{{- else if $pod.runAsGroup }}{{ $pod.runAsGroup }}{{- else if $pod.fsGroup }}{{ $pod.fsGroup }}{{- else }}{{ template "convertigo.runAsUserId" . }}{{- end }}
 {{- end }}
 
 {{/*
@@ -276,7 +280,7 @@ Compose JAVA_OPTS for the main Convertigo container.
     "-Dconvertigo.engine.billing.persistence.jdbc.driver=org.postgresql.Driver"
     "-Dconvertigo.engine.billing.persistence.dialect=org.hibernate.dialect.PostgreSQLDialect"
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.username=%s" $ctx.Values.timescaledb.user)
-    (printf "-Dconvertigo.engine.billing.persistence.jdbc.password=%s" $ctx.Values.timescaledb.password)
+    (printf "-Dconvertigo.engine.billing.persistence.jdbc.password=%s" (ternary "$(TIMESCALE_PASSWORD)" $ctx.Values.timescaledb.password (not (empty $ctx.Values.timescaledb.existingSecret))))
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.url=%s" $timescaleJdbc)
   -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" $ctx -}}
@@ -456,3 +460,18 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- end }}
 {{- join " " $opts -}}
 {{- end }}
+
+{{/* Admin credentials are mounted only in the workspace init container. */}}
+{{- define "convertigo.adminSecretName" -}}
+{{- $admin := default dict .Values.admin -}}
+{{- if not (regexMatch "^[A-Za-z0-9_.-]+$" (default "password" $admin.passwordKey)) -}}
+{{- fail "admin.passwordKey must be a Secret data key" -}}
+{{- end -}}
+{{- if not (regexMatch "^[A-Za-z0-9_.@-]+$" (default "admin" $admin.username)) -}}
+{{- fail "admin.username must be a single account identifier" -}}
+{{- end -}}
+{{- if regexMatch "convertigo[.]engine[.]admin[.](password|username)" (toString .Values.additionalJavaOpts) -}}
+{{- fail "Use admin.existingSecret instead of admin properties in additionalJavaOpts" -}}
+{{- end -}}
+{{- default (printf "%s-admin" (include "convertigo.fullname" .)) $admin.existingSecret -}}
+{{- end -}}

@@ -6,13 +6,15 @@ metadata:
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}-cdb
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-cdb
   template:
     metadata:
-      {{- with .Values.podAnnotations }}-cdb
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

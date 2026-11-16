@@ -358,7 +358,9 @@ it needs the extended key usages `serverAuth` and `clientAuth`, and the subject 
 `*.<fullname>-redis-headless.<namespace>.svc.cluster.local` and `localhost`.
 
 Tested on Kubernetes 1.37 with Redis 7.4.1 and Convertigo 8.4.7, mTLS with STRICT verification and the
-secrets written by a sidecar, two Convertigo pods, a client checking its session every 0.5 s:
+secrets written by a sidecar, two Convertigo pods, a client checking its session every 0.5 s.
+These are historical observations for that configuration, not a guarantee for every session or failure.
+Requalify with authenticated session data using [the protocol](../../docs/session-failover-test.md):
 
 | Event | Result |
 | --- | --- |
@@ -734,3 +736,34 @@ EOF
 ```
 
 The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *publicAddr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingress-ingress-XXXXX* AWS load balancer domain names.
+
+
+## Workspace startup and administrator provisioning
+
+Project installation runs in `workspace-setup`, before the engine container. It requires cross-node
+advisory locking on the shared workspace; inspect this property of your RWX driver. The startup probe
+allows up to 10 minutes for engine/project loading before liveness starts. Installation time itself
+is outside the main container probes. A completion marker is published only after ownership repair.
+Existing projects are preserved; interrupted legacy content must be inspected rather than overwritten.
+
+The chart generates a 48-character admin credential Secret when `admin.existingSecret` is empty and
+keeps it across upgrades/uninstalls. Only the init mounts the credential; it writes a SHA-512 admin
+hash in the private workspace configuration, not a JVM option. A customized existing admin is retained
+when using this automatic mode. Set `admin.existingSecret` (key `admin.passwordKey`, default `password`)
+to make that Secret authoritative; changing its content requires an approved rollout. A missing or
+empty Secret prevents initialization. Retrieve generated credentials through your approved secret
+management procedure, not application logs. Preserve the Secret along with workspace backups.
+
+AWS Marketplace project installation now requires `awsMarketplace.enabled=true`; instance-metadata
+reachability is not a provider identity check. Existing `AwsMetering` projects are not automatically
+deleted. Review them separately when moving or correcting an existing non-AWS installation.
+
+TimescaleDB accepts `timescaledb.existingSecret` with `existingSecretPasswordKey` and
+`existingSecretBillingPasswordKey`. Baserow accepts `baserow.existingSecret` with
+`existingSecretPasswordKey`; use the same Baserow key for its PostgreSQL initialization. Existing
+value-based credentials remain supported. These references do not rotate database users on an
+already-initialized PVC. The engine's legacy database/Redis options still need separate log/environment
+handling; using Secret refs does not itself remove credentials from every runtime argument.
+
+CouchDB and TimescaleDB use Recreate with RWO volumes. This avoids overlapping database versions
+but introduces a planned outage; retain a tested database backup/rollback procedure.

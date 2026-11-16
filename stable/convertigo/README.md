@@ -52,7 +52,7 @@ Find below the values.yaml customization options :
 | sharedWorkspaceSync.enabled       | false                  | Enable runtime synchronization between instances that share the same Convertigo workspace. Recommended for multi-replica `ReadWriteMany` deployments. |
 | redis.enabled                     | false                  | Deploy the embedded standalone Redis service. When false, use `sessionStore.mode=redis` and `sessionStore.redis.*` to configure external Redis. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
-| redis.auth.password | | Deprecated inline setting; managed Redis credentials use generated or existing Secrets. |
+| redis.auth.password | | Historical values remain accepted; managed Redis credentials use generated or existing Secrets. |
 | redis.auth.existingSecret         |                        | Existing secret holding the Redis password (key `redis.auth.existingSecretPasswordKey`, default `redis-password`), used instead of `redis.auth.password`. |
 | redis.auth.passwordFile           |                        | File holding the Redis password, provided in the Redis and Convertigo pods by your own volumes (for example a Vault agent). Used instead of `password` and `existingSecret`. |
 | redis.tls.enabled                 | false                  | Enable TLS on the embedded Redis and configure Convertigo to connect with `rediss`. |
@@ -81,10 +81,10 @@ Find below the values.yaml customization options :
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
 | timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
 | timescaledb.user                  | postgres               | Database username Convertigo will use to connect to TimescaleDB. Customize as needed. |
-| timescaledb.password | | Deprecated inline setting; use generated or existing credentials. |
+| timescaledb.password | | Historical values remain accepted; use generated or existing credentials. |
 | timescaledb.billing_database      | c8oAnalytics           | Database name for storing usage analytics data. |
 | timescaledb.billing_user          | c8oAnalytics           | Username for accessing the billing database. |
-| timescaledb.billing_password | | Deprecated inline setting; use generated or existing credentials. |
+| timescaledb.billing_password | | Historical values remain accepted; use generated or existing credentials. |
 | timescaledb.persistentVolume.storageClass | ebs-sc         | TimescaleDB PVC storageClass. |
 | timescaledb.persistentVolume.size         | 5Gi            | TimescaleDB PVC size. |
 | timescaledb.accessModes                   | ["ReadWriteOnce"] | TimescaleDB PVC accessModes. |
@@ -99,7 +99,7 @@ Find below the values.yaml customization options :
 | couchdb.image.repository          | couchdb                | CouchDB image repository. Customize if using another repository. |
 | couchdb.image.tag                 | 3.5                    | CouchDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
-| couchdb.password | | Deprecated inline setting; use generated or existing credentials. |
+| couchdb.password | | Historical values remain accepted; use generated or existing credentials. |
 | couchdb.persistentVolume.storageClass | ebs-sc             | CouchDB PVC storageClass. |
 | couchdb.persistentVolume.size     | 5Gi                    | CouchDB PVC size. |
 | couchdb.accessModes               | ["ReadWriteOnce"]      | CouchDB PVC accessModes. |
@@ -109,7 +109,7 @@ Find below the values.yaml customization options :
 | baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
-| baserow.baserow_password | | Deprecated inline setting; use generated or existing credentials. |
+| baserow.baserow_password | | Historical values remain accepted; use generated or existing credentials. |
 | baserow.baserow_public_url        |                        | Optional Baserow-specific external URL. Defaults to `publicUrl`. |
 | baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
@@ -746,13 +746,12 @@ allows up to 10 minutes for engine/project loading before liveness starts. Insta
 is outside the main container probes. A completion marker is published only after ownership repair.
 Existing projects are preserved; interrupted legacy content must be inspected rather than overwritten.
 
-The chart generates a 48-character admin credential Secret when `admin.existingSecret` is empty and
-keeps it across upgrades/uninstalls. Only the init mounts the credential; it writes a SHA-512 admin
-hash in the private workspace configuration, not a JVM option. A customized existing admin is retained
-when using this automatic mode. Set `admin.existingSecret` (key `admin.passwordKey`, default `password`)
-to make that Secret authoritative; changing its content requires an approved rollout. A missing or
-empty Secret prevents initialization. Retrieve generated credentials through your approved secret
-management procedure, not application logs. Preserve the Secret along with workspace backups.
+Only the first installation generates a 48-character administrator Secret when `admin.existingSecret`
+is empty. An upgrade reuses a generated Secret through lookup and never creates a replacement.
+Only the fresh-workspace init mounts the credential and writes its hash privately. Existing
+administrator credentials are never reset, even when an existing Secret is selected later.
+Retrieve initial credentials through your approved secret-management procedure, not application logs.
+Preserve the Secret along with workspace backups.
 
 AWS Marketplace project installation now requires `awsMarketplace.enabled=true`; instance-metadata
 reachability is not a provider identity check. Existing `AwsMetering` projects are not automatically
@@ -775,7 +774,7 @@ A fresh installation generates a retained Secret with independent values for the
 passphrase, Baserow administrator, PostgreSQL administrator, billing database, Baserow database,
 CouchDB and embedded Redis. `credentials.existingSecret` selects a managed Secret instead. Individual
 component Secret settings can override their reference; see [installation credentials](../../docs/installation-credentials.md) for
-keys and adoption requirements. Keep these Secrets with all persistent data; do not regenerate them
+keys and upgrade behavior. Keep these Secrets with all persistent data; do not regenerate them
 on upgrade, reinstall or restoration. GitOps rendering should always use explicit stable Secrets.
 
 New passphrase initialization is gated by `crypto.engineCompatibilityConfirmed`, false by default.
@@ -786,8 +785,13 @@ phrase, including the absence of an explicit property. They are never re-encrypt
 
 The Baserow init completes database migrations, creates the initial staff account and closes public
 signup before the main HTTP service starts. It never resets an existing account password or promotes
-an unrelated existing user. A current installation needs explicit adoption and matching credentials.
-Bootstrap and application credential consistency must be qualified before rollout.
+an unrelated existing user. This account initializer does not run during upgrades.
+Historical values and Secret references remain accepted; no automatic credential migration is performed.
 
 Fresh workspace Context logging defaults to WARN. Project/motor logging improvements and any
 passphrase rotation are separate changes; the chart does not migrate existing encrypted data.
+
+Routine upgrades never generate or rotate credentials or change crypto.passphrase. Legacy component
+environments are preserved through lookup; encrypted workspace files are untouched. Productions
+will be reviewed individually rather than requiring an adoption step before a normal upgrade.
+See `tests/upgrade-credentials.py` for offline server-dry-run regression cases using synthetic data.

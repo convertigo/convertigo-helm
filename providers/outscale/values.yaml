@@ -7,7 +7,6 @@ progressDeadlineSeconds: 1800
 
 credentials:
   existingSecret: platform-installation
-  adoptExisting: false
 
 admin:
   existingSecret: platform-admin

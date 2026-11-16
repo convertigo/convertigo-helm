@@ -52,8 +52,8 @@ class InitializeWorkspace {
         if (state.isEmpty()) {
             boolean existing = hasEntries(configuration) || hasEntries(workspace.resolve("projects"))
                 || Files.exists(workspace.resolve(".chart-install-complete"));
-            if (existing && !env("BOOTSTRAP_ADOPT_EXISTING", "false").equals("true"))
-                throw new IOException("Existing workspace requires explicit credential adoption");
+            // Existing workspaces are never an invitation to rewrite identity or credentials.
+            if (existing) return;
             if (!existing && !env("BOOTSTRAP_CRYPTO_COMPATIBLE", "false").equals("true"))
                 throw new IOException("Engine passphrase compatibility must be confirmed before new initialization");
             state.setProperty("mode", existing ? "existing" : "new");

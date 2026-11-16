@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import yaml
 
 chart = Path(__file__).resolve().parents[1] / 'stable/convertigo'
 lock = json.loads((chart / 'files/baserow-plugins/c8oforms.json').read_text())
@@ -56,9 +57,10 @@ for tag in lock['tested_baserow_versions']:
     docs = documents(render(*enabled, '--set', 'baserow.image.tag=' + tag))
     deployment = docs['templates/BRdeployment.yaml']
     assert 'image: baserow/baserow:' + tag in deployment
-    assert '- name: BASEROW_PLUGIN_URLS\n              value: "%s"' % url in deployment
+    environment = {e['name']: e for e in yaml.safe_load(deployment)['spec']['template']['spec']['containers'][0]['env']}
+    assert environment['BASEROW_PLUGIN_URLS']['value'] == url
     # Offline install: pip builds the plugin with the setuptools of the image (inverted variable)
-    assert '- name: PIP_NO_BUILD_ISOLATION\n              value: "false"' in deployment
+    assert environment['PIP_NO_BUILD_ISOLATION']['value'] == 'false'
     assert '- name: c8oforms-plugin\n          configMap:\n            name: %s' % config_map in deployment
     assert '- name: c8oforms-plugin\n              mountPath: /c8o-plugins\n              readOnly: true' in deployment
     assert '- name: br-plugins\n          emptyDir: {}' in deployment

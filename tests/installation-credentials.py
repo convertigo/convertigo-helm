@@ -36,15 +36,14 @@ default = render()
 a = bundle(default)['data']; b = bundle(render())['data']
 assert len(a) == 7 and all(len(base64.b64decode(v)) == 64 for v in a.values())
 assert all(a[k] != b[k] for k in a) and len(set(a.values())) == len(a)
-render('--is-upgrade', failure=True)
-render('--set', 'credentials.adoptExisting=true', failure=True)
-render('--set', 'timescaledb.password=fixture', failure=True)
-render('--set-string', 'additionalJavaOpts=-Dconvertigo.engine.crypto.passphrase=fixture', failure=True)
-render('--is-upgrade', '--set', 'credentials.adoptExisting=true', failure=True)
-adopted = render('--is-upgrade', '--set', 'credentials.adoptExisting=true',
-                 '--set', 'credentials.existingSecret=prior-credentials',
-                 '--set', 'admin.existingSecret=prior-admin')
-assert not any(x['kind'] == 'Secret' for x in adopted)
+legacy_upgrade = render('--is-upgrade')
+assert not any(x['kind'] == 'Secret' for x in legacy_upgrade)
+# Historical values and JVM settings remain accepted; no adoption flag is required.
+render('--is-upgrade', '--set', 'timescaledb.password=fixture',
+       '--set-string', 'additionalJavaOpts[0]=-Dconvertigo.engine.crypto.passphrase=fixture')
+provided = render('--is-upgrade', '--set', 'credentials.existingSecret=prior-credentials',
+                  '--set', 'admin.existingSecret=prior-admin')
+assert not any(x['kind'] == 'Secret' for x in provided)
 render('--set', 'couchdb.existingSecretNamespace=another-namespace', failure=True)
 for d in default:
     if d['kind'] != 'Deployment':
@@ -102,13 +101,14 @@ with tempfile.TemporaryDirectory(prefix='installation-crypto-fixture-') as direc
     call(first,'prepare',fail=True); assert properties.read_bytes()==prior
     prior_symbols=symbols.read_bytes(); call(first,'symbols',fail=True); assert symbols.read_bytes()==prior_symbols
     (inputs/'baserow-admin-password').write_text(old_pwd)
-    # Legacy data without a marker requires adoption and retains its original passphrase/symbol bytes.
+    # Existing workspaces never receive any credential or crypto write, even without adoption.
     legacy=root/'legacy'; (legacy/'configuration').mkdir(parents=True)
     legacy_phrase=secrets.token_hex(32)
     lp=legacy/'configuration/engine.properties'; lp.write_text('crypto.passphrase='+legacy_phrase+'\n')
     ls=legacy/'configuration/global_symbols.properties'; ls.write_bytes(b'fixture.legacy=value\n')
-    before=ls.read_bytes(); call(legacy,'prepare',fail=True)
+    before=ls.read_bytes(); prior_properties=lp.read_bytes(); call(legacy,'prepare',compatible=False)
     call(legacy,'prepare',adopt=True,compatible=False); call(legacy,'symbols',adopt=True)
+    assert lp.read_bytes()==prior_properties
     assert 'crypto.passphrase='+legacy_phrase in lp.read_text() and ls.read_bytes()==before
     # An old workspace with no explicit passphrase keeps that absence (engine's existing setting).
     absent=root/'legacy-implicit'; (absent/'configuration').mkdir(parents=True)

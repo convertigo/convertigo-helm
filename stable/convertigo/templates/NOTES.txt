@@ -17,7 +17,7 @@
 
 Here are the application URLS.
 
-Convertigo Platform Admin console (Default user password is admin/admin):
+Convertigo Platform Admin console (use the installation account):
 {{ include "convertigo.publicUrl" . }}/convertigo/admin
 
 Convertigo No Code Studio (For building Citizen Dev No Code applications):
@@ -32,13 +32,13 @@ Convertigo Low Code Studio (For building Professional Low Code Applications)
    - "Https connexion" checked to true
    - "Trust all certificates" checked to true (Uncheck it to false if you have a valid non autosigned certificate)
 
-Installation credentials are stored in generated or explicitly selected Secrets. Keep these Secrets
-with the persistent data. Do not change crypto.passphrase on an existing installation: the engine
-does not re-encrypt existing data. A changed installation identity stops initialization.
-Older installations require explicit adoption using their unchanged credentials and a separate,
-authorized inventory/migration plan. A generated Secret must not replace existing database passwords.
+New installations generate credentials once or use provided Secrets. Upgrades reuse existing
+Secrets and established values without changing passwords or crypto.passphrase. Legacy values
+remain accepted; no automatic credential adoption or account initialization runs during an upgrade.
+Keep credential Secrets with their persistent data. Existing productions need a separately approved,
+case-by-case plan for any future credential change.
 
-{{- if not (.Values.crypto | default dict).engineCompatibilityConfirmed }}
+{{- if and (not (include "convertigo.existingInstallation" .)) (not (.Values.crypto | default dict).engineCompatibilityConfirmed) }}
 New workspace passphrase initialization is currently disabled. Qualify the selected engine build
 before enabling crypto.engineCompatibilityConfirmed; do not use this switch to rotate existing data.
 {{- end }}

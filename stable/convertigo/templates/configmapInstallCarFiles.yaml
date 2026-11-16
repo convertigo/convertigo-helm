@@ -10,6 +10,7 @@ data:
     WORKSPACE="${WORKSPACE:-/workspace}"
     PROJECTS_DIR="$WORKSPACE/projects"
     CONFIG_DIR="$WORKSPACE/configuration"
+    PRESERVE_CREDENTIALS="{{ if include "convertigo.existingInstallation" . }}true{{ else }}false{{ end }}"
     OWNER_UID={{ include "convertigo.runAsUserId" . }}
     OWNER_GID={{ include "convertigo.runAsGroupId" . }}
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
@@ -27,6 +28,10 @@ data:
     fi
     exec 9<>"$WORKSPACE/.chart-install.lock"
     flock -x -w {{ default 900 (.Values.projectInstallation | default dict).lockTimeoutSeconds }} 9
+    # A retained/legacy workspace is not a new credential identity, including after reinstall.
+    if [[ -f "$WORKSPACE/.chart-install-complete" ]] || { [[ ! -f "$CONFIG_DIR/.chart-crypto-state" ]] && { [[ -n "$(ls -A "$CONFIG_DIR" 2>/dev/null)" ]] || [[ -n "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]]; }; }; then
+      PRESERVE_CREDENTIALS=true
+    fi
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
     STAGE=$(mktemp -d "$WORKSPACE/.chart-install.XXXXXX")
     trap 'rm -rf -- "$STAGE"' EXIT
@@ -45,7 +50,6 @@ data:
     ADMIN_SECRET_FILE="${ADMIN_SECRET_FILE:-/run/convertigo-admin/password}"
     export BOOTSTRAP_CRYPTO_COMPATIBLE="{{ if (.Values.crypto | default dict).engineCompatibilityConfirmed }}true{{ else }}false{{ end }}"
     export WORKSPACE
-    export BOOTSTRAP_ADOPT_EXISTING="{{ if (.Values.credentials | default dict).adoptExisting }}true{{ else }}false{{ end }}"
     export BOOTSTRAP_COUCH_USER={{ .Values.couchdb.admin | quote }}
     export BOOTSTRAP_BASEROW_EMAIL={{ default "admin@convertigo.com" (.Values.baserow.admin | default dict).email | quote }}
     export BOOTSTRAP_REDIS_PASSWORD="{{ if and .Values.redis.enabled .Values.redis.auth.enabled (not .Values.redis.auth.passwordFile) }}true{{ else }}false{{ end }}"
@@ -59,10 +63,10 @@ data:
         exit 1
       }
     }
-    initialize_credentials prepare
+    if [[ "$PRESERVE_CREDENTIALS" != true ]]; then initialize_credentials prepare; fi
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
-    if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
+    if [[ "$PRESERVE_CREDENTIALS" != true && ! -f "$GLOBAL_SYMBOLS" ]]; then
         echo "No Symbols found, generating Symbols"
         mkdir -p "$CONFIG_DIR"
         cat > "$STAGE/global_symbols.properties" << EOF
@@ -122,6 +126,7 @@ data:
         mv -- "$STAGE/metering/c8oprj-aws-metering-master" "$PROJECTS_DIR/AwsMetering"
       fi
     fi
+    if [[ "$PRESERVE_CREDENTIALS" != true ]]; then
     # The Secret is visible to this init only. Store the hash, never a JVM option or environment value.
     test -s "$ADMIN_SECRET_FILE" || { echo "Admin credential file is empty" >&2; exit 1; }
     ADMIN_HASH=$(sha512sum < "$ADMIN_SECRET_FILE" | cut -d ' ' -f1)
@@ -144,6 +149,7 @@ data:
     unset EXISTING_HASH DEFAULT_HASH
     unset ADMIN_HASH
     initialize_credentials symbols
+    fi
     # Always repair legacy/interrupted root-owned files, even when projects already exist.
     if [[ $(id -u) == 0 ]]; then
       find "$PROJECTS_DIR" "$CONFIG_DIR" -xdev \( ! -uid "$OWNER_UID" -o ! -gid "$OWNER_GID" \) -exec chown -h "$OWNER_UID:$OWNER_GID" {} +

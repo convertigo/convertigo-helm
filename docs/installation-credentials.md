@@ -26,11 +26,12 @@ random rendering or unavailable `lookup` results.
 
 `crypto.existingSecret`/`passphraseKey` can select another phrase file. Component `existingSecret`
 settings and key mappings can select another password source. All references are namespace-local;
-they do not copy data from another namespace. Fresh renders reject inline managed-service passwords.
-Legacy inline fields are ignored during explicit adoption; prepare the matching Secret and remove
-obsolete inline values under the approved migration plan. Required missing/empty credentials stop initialization.
-The phrase key is optional in projections only so an old workspace can retain its original setting;
-a new workspace still requires it. The chart accepts no crypto JVM override alongside this workflow.
+they do not copy data from another namespace. Inline fields remain available for compatibility.
+Historical inline password fields remain accepted. On a fresh installation, explicitly supplied
+values populate the installation Secret instead of being replaced by random ones. Upgrades retain
+established values and references; a missing generated Secret is never created during an upgrade.
+The chart does not require an adoption flag or a private inventory to perform a normal upgrade.
+Required credentials for a new initialization must be present; no old workspace is initialized.
 
 New phrase initialization is disabled until `crypto.engineCompatibilityConfirmed=true` is explicitly
 selected for a qualified engine build. The current prepared image/version must not be interpreted as
@@ -55,38 +56,50 @@ choice, not a prerequisite for the server-side account integration. Bootstrap do
 existing password, activate another user or grant staff to an unrelated account. Interrupted fresh
 creation can resume with the same identity. An unexpected existing account/credential stops startup.
 
-## Existing installations
+## Existing installations and ordinary Helm upgrades
 
-A legacy upgrade without a retained installation Secret/schema is rejected at render time unless
-`credentials.adoptExisting=true` and `credentials.existingSecret` are explicitly supplied. Kept PVCs
-are included in the check. The init independently checks actual workspace contents, so a client-only
-render or reinstall cannot silently replace an existing passphrase with a newly generated one.
+Generation is installation-only. On upgrades, `lookup` reuses the complete data of already-generated
+installation and administrator Secrets, including additional keys. No random fallback fills a missing
+Secret or key during an upgrade. Explicit component Secret references remain in use. Historical
+8.4.7 values are accepted without `credentials.adoptExisting`; that field is retained only as an inert
+compatibility setting. No account initialization or Baserow signup-policy write runs on upgrade.
 
-Before any adoption, obtain an explicit GO for the exact environment and use its isolated context
-wrapper. The plan must preserve:
+Existing workloads are looked up to preserve their established account/connection environment
+entries and Secret references, including credentials that came from old chart
+defaults rather than saved user values. When an offline render cannot find those resources, it uses
+the supplied historical values/references and generates nothing. Use a server dry-run with the proper
+release namespace for a representative upgrade preview. A client-only preview is not proof of the
+live values. The legacy environment remains in its original form; improving that exposure is a
+separate, explicitly approved migration. The historical JAVA_OPTS entry is preserved as a whole because it can embed credentials. Other
+settings such as JXMX and plugin options still evolve normally. A separate approved change is needed
+to replace an existing JAVA_OPTS entry without changing its credential identity.
 
-1. The current effective phrase and where it comes from. If the property is absent, retain its absence;
-   do not insert a fresh phrase. A phrase supplied by a JVM override needs a separately approved,
-   value-preserving configuration transition before this chart can be adopted. Keep symbols,
-   administrative roles and encrypted application records intact.
-2. Current database credentials, users, key mappings, Redis authentication mode and connection/routing
-   settings. Supply those unchanged through selected Secrets. Do not assume new defaults equal the
-   old effective values. A PostgreSQL password environment variable does not rotate a user in an
-   initialized database; a credential change needs its own coordinated operation.
-3. The Baserow technical account identity and staff status, its current matching password, and the
-   engine's matching symbol. Bootstrap verifies an adopted account and never resets it. A discrepancy
-   must be reviewed; do not clear identity markers to make initialization continue.
-4. A private backup/restore plan for configuration, data and their Secrets, agreed before changes.
-   Keep original values and phrase fingerprints privately; never print credentials, cookies, decoded
-   symbols, JVM arguments or application documents in reports.
+Workspace initialization skips all credential, administrator, crypto and symbol writes for upgrades
+or retained workspaces. Existing engine properties, global symbols and user-role records remain
+untouched. This includes an absent crypto property (the engine's established default) and existing
+JVM overrides. The chart neither re-encrypts data nor resets passwords. Changes to Secret contents
+or new credential values supplied during an upgrade do not authorize an account/password change.
+Keep the matching Secret data with persistent storage; restore a missing managed Secret from its
+backup rather than generating a replacement identity.
 
-Adoption is not remediation or password rotation. If an account needs a new password, that separate
-operation must coordinate the account and its engine symbol with the current phrase unchanged,
-then validate the application. The chart's immutable bootstrap identity must be reconciled under that
-same approved plan; it is not an invitation to edit markers or reset generated Secrets automatically.
-Existing encrypted symbols are preserved byte for byte by the symbol bootstrap. A new phrase in a
-selected Secret is ignored for an existing workspace; no value is substituted into its crypto property.
+After an upgrade the chart's safer project installer and probes may be used, but the credential
+workflow does not convert an existing production to the new-installation scheme. Productions will
+be reviewed individually. Any future account/credential migration needs its own approved inventory,
+consistent account and application settings, backups, rollback and functional qualification. Never
+change crypto.passphrase for retained data; the engine does not re-encrypt it. PostgreSQL initialization
+variables do not rotate users in an existing database.
 
-A change requiring data re-encryption must wait for supported engine migration facilities and a
-separate qualification. Rollback must retain the exact phrase and credential identity needed by the
-data; rolling back only an image or chart is not a credential or encryption rollback.
+Rollback preserves the exact phrase and credential identity needed by the data. Rolling back only
+an image or chart is not a credential or encryption rollback. Never clear identity markers, delete
+kept Secrets, reset an account or restore data automatically to make a routine upgrade proceed.
+
+## Local upgrade regression test
+
+Run `python3 tests/upgrade-credentials.py`. It performs real `helm upgrade --dry-run=server` commands
+(ordinary and --reuse-values) against a GET-only Kubernetes API fixture bound to loopback, initialized from the published 8.4.7
+chart. It never uses a real cluster configuration or starts an engine. Cases include historical
+values with no credential Secret, existing CouchDB/Redis Secrets, minimal saved credential values,
+and Redis with and without AUTH. Existing environments/references are compared exactly; generated
+Secrets are reused byte for byte, including extra keys; unrelated JXMX changes remain effective. The rendered installer is exercised on
+synthetic retained workspace files, checking unchanged contents and modes and no credential CLI call.
+This tests upgrade rendering and workspace credential preservation, not live production availability.

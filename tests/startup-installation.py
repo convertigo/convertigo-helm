@@ -101,7 +101,7 @@ with tempfile.TemporaryDirectory(prefix='chart-startup-fixture-') as directory:
             tar.addfile(member, io.BytesIO(data))
     def tool(name, body):
         p = tools / name; p.write_text('#!' + sys.executable + '\n' + body); p.chmod(0o755)
-    tool('java', 'import sys\nsys.exit(0)\n')
+    tool('java', 'import sys,os,pathlib\nif sys.argv[-1]=="prepare":\n p=pathlib.Path(os.environ["WORKSPACE"])/"configuration/.chart-crypto-state";p.parent.mkdir(parents=True,exist_ok=True);p.write_text("mode=new\\n")\nsys.exit(0)\n')
     tool('flock', '''import fcntl,os,sys,time
 fd=int(sys.argv[-1]); deadline=time.monotonic()+float(sys.argv[sys.argv.index('-w')+1])
 while True:
@@ -159,10 +159,10 @@ print(hashlib.sha512(sys.stdin.buffer.read()).hexdigest()+'  -')
     properties.write_text('admin.username=fixture\nadmin.password='+preserved+'\n')
     run(env(workspace, count))
     assert 'admin.password='+preserved in properties.read_text()
-    # An explicitly selected existing Secret is authoritative.
+    # Even an explicitly selected Secret must not replace an existing administrator on restart.
     script.write_text(installer(render('--set', 'admin.existingSecret=fixture-admin')))
     run(env(workspace, count))
-    assert 'admin.password='+expected in properties.read_text()
+    assert 'admin.password='+preserved in properties.read_text()
     # Interruption after publication must not mark completion or overwrite existing project changes on retry.
     script.write_text(installer(default))
     interrupted = root / 'interrupted'; interrupted.mkdir(); second_count = root / 'count2'

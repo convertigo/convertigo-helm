@@ -1,4 +1,5 @@
 {{- if .Values.baserow.enabled }}
+{{- $fresh := not (include "convertigo.existingInstallation" .) -}}
 {{- $c8oforms := include "convertigo.baserowC8oforms" . | fromJson }}
 apiVersion: apps/v1
 kind: Deployment
@@ -43,6 +44,7 @@ spec:
         - name: br-plugins
           emptyDir: {}
         {{- end }}
+        {{- if $fresh }}
         - name: credential-bootstrap
           configMap:
             name: {{ include "convertigo.fullname" . }}-credential-bootstrap
@@ -67,7 +69,7 @@ spec:
             - name: BOOTSTRAP_BASEROW_NAME
               value: {{ default "Platform administrator" (.Values.baserow.admin | default dict).name | quote }}
             - name: BOOTSTRAP_ADOPT_EXISTING
-              value: {{ ternary "true" "false" (dig "adoptExisting" false (.Values.credentials | default dict)) | quote }}
+              value: "false"
             - name: BOOTSTRAP_PUBLIC_SIGNUP
               value: {{ ternary "true" "false" (dig "allowPublicSignup" false (.Values.baserow.admin | default dict)) | quote }}
           volumeMounts:
@@ -81,6 +83,7 @@ spec:
               readOnly: true
           resources:
             {{- toYaml .Values.baserow.resources | nindent 12 }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}-br
           command: ["/bin/sh", "-c", "sed -i -e s,127.0.0.1,0.0.0.0, /baserow/supervisor/default_baserow_env.sh && /baserow.sh start"]
@@ -98,19 +101,7 @@ spec:
               readOnly: true
             {{- end }}
           env:
-            {{- include "convertigo.baserowDatabaseEnv" . | nindent 12 }}
-            - name: BASEROW_EXTRA_ALLOWED_HOSTS
-              value: "*"
-            {{- if $c8oforms.enabled }}
-            # Next to the mount: a container with the variable and without the file does not start.
-            - name: BASEROW_PLUGIN_URLS
-              value: {{ printf "file:///c8o-plugins/%s" $c8oforms.archive | quote }}
-            # The image installs the plugin with pip, by default in an isolated build environment that downloads
-            # setuptools from PyPI: without Internet access, Baserow would not start. "false" (sic, pip inverts
-            # this variable) builds it with the setuptools of the image instead, offline.
-            - name: PIP_NO_BUILD_ISOLATION
-              value: "false"
-            {{- end }}
+            {{- include "convertigo.componentEnvironment" (list . "-br" (include "convertigo.defaultEnvironment_br" .) (list "DATABASE_HOST" "DATABASE_PORT" "DATABASE_NAME" "DATABASE_USER" "DATABASE_PASSWORD")) | nindent 12 }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

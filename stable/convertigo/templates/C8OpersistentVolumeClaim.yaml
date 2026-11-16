@@ -4,7 +4,9 @@ metadata:
   name: {{ include "convertigo.fullname" . }}-c8o-workspace
   annotations:
     "helm.sh/resource-policy": keep
+    {{- if not (include "convertigo.legacyCredentials" .) }}
     convertigo.io/credential-schema: v1
+    {{- end }}
 spec:
   accessModes:
     {{- range (default (list "ReadWriteOnce") .Values.workspace.accessModes) }}

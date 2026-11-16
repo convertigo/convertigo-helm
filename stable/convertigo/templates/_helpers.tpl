@@ -1,3 +1,23 @@
+{{/* Keep established credential wiring on upgrades, including releases predating generated Secrets. */}}
+{{- define "convertigo.existingInstallation" -}}
+{{- if .Release.IsUpgrade -}}true
+{{- else -}}
+  {{- $existing := false -}}
+  {{- range $suffix := list "-c8o-workspace" "-timescaledb-workspace" "-br-workspace" "-cdb-workspace" -}}
+    {{- if lookup "v1" "PersistentVolumeClaim" $.Release.Namespace (printf "%s%s" (include "convertigo.fullname" $) $suffix) -}}{{- $existing = true -}}{{- end -}}
+  {{- end -}}
+  {{- if $existing -}}true{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- define "convertigo.legacyCredentials" -}}
+{{- $name := printf "%s-credentials" (include "convertigo.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- $saved := lookup "v1" "Secret" .Release.Namespace $name -}}
+{{- $pvc := lookup "v1" "PersistentVolumeClaim" .Release.Namespace (printf "%s-c8o-workspace" (include "convertigo.fullname" .)) -}}
+{{- $managed := false -}}
+{{- if $pvc -}}{{- $managed = eq (dig "annotations" "convertigo.io/credential-schema" "" $pvc.metadata) "v1" -}}{{- end -}}
+{{- if and (include "convertigo.existingInstallation" .) (not $saved) (not $managed) -}}true{{- end -}}
+{{- end -}}
+
 {{/*
 Expand the name of the chart.
 */}}
@@ -82,7 +102,14 @@ get run as group id
 {{/*
 Resolve CouchDB credential value from an existing secret or fallback.
 */}}
-{{- define "convertigo.couchdbUsername" -}}{{- .Values.couchdb.admin -}}{{- end -}}
+{{- define "convertigo.couchdbUsername" -}}
+{{- if include "convertigo.legacyCredentials" . -}}
+{{- include "convertigo.couchdbSecretValue" (list . .Values.couchdb.existingSecretUsernameKey .Values.couchdb.admin) -}}
+{{- else -}}{{- .Values.couchdb.admin -}}{{- end -}}
+{{- end -}}
+{{- define "convertigo.couchdbPassword" -}}
+{{- include "convertigo.couchdbSecretValue" (list . .Values.couchdb.existingSecretPasswordKey .Values.couchdb.password) -}}
+{{- end -}}
 
 {{/*
 Resolve the CouchDB URL to be used by Convertigo.
@@ -165,11 +192,24 @@ Resolve embedded Redis TLS secret name. Empty: the files are provided at the mou
 Source of the embedded Redis password: file, secret, value, or empty when Redis AUTH is disabled.
 */}}
 {{- define "convertigo.redisPasswordSource" -}}
+{{- $prior := include "convertigo.previousEnvironment" (list . "-redis") | fromJson -}}
+{{- if $prior.found -}}
+  {{- range $entry := $prior.env -}}
+    {{- if eq $entry.name "REDIS_PASSWORD_FILE" -}}file
+    {{- else if eq $entry.name "REDIS_PASSWORD" -}}
+      {{- if $entry.valueFrom -}}secret{{- else -}}value{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
 {{- $auth := default dict .Values.redis.auth -}}
 {{- if $auth.enabled -}}
   {{- if $auth.passwordFile -}}file
+  {{- else if $auth.existingSecret -}}secret
+  {{- else if include "convertigo.legacyCredentials" . -}}
+    {{- if $auth.password -}}value{{- end -}}
   {{- else -}}secret
   {{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end }}
 
@@ -177,6 +217,14 @@ Source of the embedded Redis password: file, secret, value, or empty when Redis 
 Environment variables giving the embedded Redis password to a container (REDIS_PASSWORD or REDIS_PASSWORD_FILE).
 */}}
 {{- define "convertigo.redisPasswordEnv" -}}
+{{- $prior := include "convertigo.previousEnvironment" (list . "-redis") | fromJson -}}
+{{- if $prior.found -}}
+  {{- range $entry := $prior.env -}}
+    {{- if has $entry.name (list "REDIS_PASSWORD" "REDIS_PASSWORD_FILE") -}}
+{{ toYaml (list $entry) }}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
 {{- $source := include "convertigo.redisPasswordSource" . -}}
 {{- if eq $source "file" }}
 - name: REDIS_PASSWORD_FILE
@@ -191,6 +239,7 @@ Environment variables giving the embedded Redis password to a container (REDIS_P
 - name: REDIS_PASSWORD
   value: {{ .Values.redis.auth.password | quote }}
 {{- end }}
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -232,6 +281,11 @@ Compose JAVA_OPTS for the main Convertigo container.
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.username=%s" $ctx.Values.timescaledb.user)
     (printf "-Dconvertigo.engine.billing.persistence.jdbc.url=%s" $timescaleJdbc)
   -}}
+{{- if include "convertigo.legacyCredentials" $ctx -}}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.fullsync.couch.username=%s" (trim (include "convertigo.couchdbUsername" $ctx))) -}}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.fullsync.couch.password=%s" (trim (include "convertigo.couchdbPassword" $ctx))) -}}
+  {{- $opts = append $opts (printf "-Dconvertigo.engine.billing.persistence.jdbc.password=%s" $ctx.Values.timescaledb.password) -}}
+{{- end -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" $ctx -}}
 {{- $sessionRedis := default dict $ctx.Values.sessionStore.redis -}}
 {{- $redisTopology := default "single" $sessionRedis.topology -}}
@@ -320,6 +374,8 @@ Compose JAVA_OPTS for the main Convertigo container.
     {{- if eq $passwordSource "value" }}
       {{- $opts = append $opts (printf "-Dconvertigo.engine.session.redis.password=%s" $ctx.Values.redis.auth.password) }}
 
+    {{- else if and (eq $passwordSource "secret") (include "convertigo.legacyCredentials" $ctx) }}
+      {{- $opts = append $opts "-Dconvertigo.engine.session.redis.password=$(REDIS_PASSWORD)" }}
     {{- end }}
   {{- else }}
     {{- with $sessionRedis.host }}
@@ -417,40 +473,14 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- if not (regexMatch "^[A-Za-z0-9_.@-]+$" (default "admin" $admin.username)) -}}
 {{- fail "admin.username must be a single account identifier" -}}
 {{- end -}}
-{{- if regexMatch "convertigo[.]engine[.]admin[.](password|username)" (toString .Values.additionalJavaOpts) -}}
-{{- fail "Use admin.existingSecret instead of admin properties in additionalJavaOpts" -}}
-{{- end -}}
+
 {{- default (printf "%s-admin" (include "convertigo.fullname" .)) $admin.existingSecret -}}
 {{- end -}}
 
 {{/* Installation credential references. */}}
 {{- define "convertigo.installationSecretName" -}}
-{{- if regexMatch "convertigo[.]engine[.]crypto[.]passphrase" (toString .Values.additionalJavaOpts) -}}
-{{- fail "Preserve the existing passphrase in private workspace configuration before adopting this chart; crypto JVM overrides are not accepted" -}}
-{{- end -}}
 {{- $cfg := .Values.credentials | default dict -}}
-{{- if and $cfg.adoptExisting (empty $cfg.existingSecret) -}}
-{{- fail "Credential adoption requires an explicitly supplied existing Secret" -}}
-{{- end -}}
-{{- if not $cfg.adoptExisting -}}
-  {{- range $value := list .Values.timescaledb.password .Values.timescaledb.billing_password .Values.baserow.baserow_password .Values.couchdb.password .Values.redis.auth.password -}}
-    {{- if not (empty $value) -}}{{- fail "Use generated or existing credential Secrets instead of inline managed-service passwords" -}}{{- end -}}
-  {{- end -}}
-{{- end -}}
 {{- $name := printf "%s-credentials" (include "convertigo.fullname" .) | trunc 63 | trimSuffix "-" -}}
-{{- $saved := lookup "v1" "Secret" .Release.Namespace $name -}}
-{{- $pvc := lookup "v1" "PersistentVolumeClaim" .Release.Namespace (printf "%s-c8o-workspace" (include "convertigo.fullname" .)) -}}
-{{- $existingData := not (empty $pvc) -}}
-{{- range $suffix := list "-timescaledb-workspace" "-br-workspace" "-cdb-workspace" -}}
-  {{- if lookup "v1" "PersistentVolumeClaim" $.Release.Namespace (printf "%s%s" (include "convertigo.fullname" $) $suffix) -}}{{- $existingData = true -}}{{- end -}}
-{{- end -}}
-{{- $managed := false -}}
-{{- if $pvc -}}{{- $managed = eq (dig "annotations" "convertigo.io/credential-schema" "" $pvc.metadata) "v1" -}}{{- end -}}
-{{- if and (or .Release.IsUpgrade $existingData) (not $saved) (not $managed) -}}
-  {{- if not (and $cfg.adoptExisting $cfg.existingSecret) -}}
-    {{- fail "Existing installations require credentials.adoptExisting=true and a Secret containing their unchanged credentials" -}}
-  {{- end -}}
-{{- end -}}
 {{- default $name $cfg.existingSecret -}}
 {{- end -}}
 {{- define "convertigo.cryptoSecretName" -}}{{- default (include "convertigo.installationSecretName" .) (.Values.crypto | default dict).existingSecret -}}{{- end -}}
@@ -458,7 +488,7 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- define "convertigo.timescaleSecretName" -}}{{- default (include "convertigo.installationSecretName" .) .Values.timescaledb.existingSecret -}}{{- end -}}
 {{- define "convertigo.baserowDatabaseSecretName" -}}{{- default (include "convertigo.installationSecretName" .) .Values.baserow.existingSecret -}}{{- end -}}
 {{- define "convertigo.couchSecretName" -}}
-{{- if and .Values.couchdb.existingSecretNamespace (ne .Values.couchdb.existingSecretNamespace .Release.Namespace) -}}
+{{- if and (not (include "convertigo.legacyCredentials" .)) .Values.couchdb.existingSecretNamespace (ne .Values.couchdb.existingSecretNamespace .Release.Namespace) -}}
 {{- fail "CouchDB credential Secrets must be in the release namespace" -}}
 {{- end -}}
 {{- default (include "convertigo.installationSecretName" .) .Values.couchdb.existingSecret -}}{{- end -}}
@@ -476,8 +506,213 @@ Compose JAVA_OPTS for the main Convertigo container.
 - name: DATABASE_USER
   value: {{ .Values.baserow.baserow_user | quote }}
 - name: DATABASE_PASSWORD
+  {{- if and (include "convertigo.legacyCredentials" .) (not .Values.baserow.existingSecret) }}
+  value: {{ .Values.baserow.baserow_password | quote }}
+  {{- else }}
   valueFrom:
     secretKeyRef:
       name: {{ include "convertigo.baserowDatabaseSecretName" . }}
       key: {{ default "baserow-database-password" .Values.baserow.existingSecretPasswordKey }}
+{{- end }}
+{{- end -}}
+
+{{- define "convertigo.couchdbSecretValue" -}}
+{{- $ctx := index . 0 -}}
+{{- $key := index . 1 -}}
+{{- $fallback := printf "%s" (index . 2) -}}
+{{- $value := $fallback -}}
+{{- $secretName := $ctx.Values.couchdb.existingSecret -}}
+{{- if and $secretName (ne $secretName "") }}
+  {{- if or (not $key) (eq $key "") }}
+    {{- if not $ctx.Values.couchdb.existingSecretOptional }}
+      {{- fail "couchdb.existingSecretUsernameKey/PasswordKey must be provided when couchdb.existingSecret is set" }}
+    {{- end }}
+  {{- else }}
+    {{- $namespace := default $ctx.Release.Namespace $ctx.Values.couchdb.existingSecretNamespace -}}
+    {{- $secret := lookup "v1" "Secret" $namespace $secretName -}}
+    {{- if $secret }}
+      {{- $data := index $secret.data $key -}}
+      {{- if $data }}
+        {{- $value = printf "%s" ($data | b64dec) -}}
+      {{- else }}
+        {{- if not $ctx.Values.couchdb.existingSecretOptional }}
+          {{- fail (printf "couchdb existing secret %q is missing key %q" $secretName $key) }}
+        {{- end }}
+      {{- end }}
+    {{- else }}
+      {{- if not $ctx.Values.couchdb.existingSecretOptional }}
+        {{- fail (printf "couchdb existing secret %q not found in namespace %q" $secretName $namespace) }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- $value | trimAll "\n\r" -}}
+{{- end }}
+
+{{/* On an upgrade the live workload is the authority for established credentials,
+including default values not present in the release's user-supplied values. */}}
+{{- define "convertigo.previousEnvironment" -}}
+{{- $ctx := index . 0 -}}{{- $suffix := index . 1 -}}
+{{- $result := dict "found" false "env" (list) -}}
+{{- if include "convertigo.existingInstallation" $ctx -}}
+  {{- $name := printf "%s%s" (include "convertigo.fullname" $ctx) $suffix -}}
+  {{- $object := lookup "apps/v1" "Deployment" $ctx.Release.Namespace $name -}}
+  {{- if and (not $object) (eq $suffix "-redis") -}}
+    {{- $object = lookup "apps/v1" "StatefulSet" $ctx.Release.Namespace $name -}}
+  {{- end -}}
+  {{- if $object -}}
+    {{- $result = dict "found" true "env" ((first $object.spec.template.spec.containers).env | default (list)) -}}
+  {{- end -}}
+{{- end -}}
+{{- toJson $result -}}
+{{- end -}}
+
+{{/* Preserve established account/connection entries while allowing unrelated settings to evolve.
+JAVA_OPTS is atomic because historical credentials can be embedded in arbitrary JVM arguments. */}}
+{{- define "convertigo.componentEnvironment" -}}
+{{- $ctx := index . 0 -}}{{- $suffix := index . 1 -}}{{- $current := index . 2 | fromYamlArray -}}
+{{- range $entry := $current -}}
+  {{- if not (kindIs "map" $entry) -}}{{- fail "Invalid component environment YAML" -}}{{- end -}}
+  {{- if not $entry.name -}}{{- fail "Component environment entry is missing its name" -}}{{- end -}}
+{{- end -}}
+{{- $protected := index . 3 -}}
+{{- $prior := include "convertigo.previousEnvironment" (list $ctx $suffix) | fromJson -}}
+{{- if not $prior.found -}}{{- toYaml $current -}}
+{{- else -}}
+  {{- $byName := dict -}}{{- range $current -}}{{- $_ := set $byName .name . -}}{{- end -}}
+  {{- $seen := dict -}}{{- $result := list -}}
+  {{- range $entry := $prior.env -}}
+    {{- $_ := set $seen $entry.name true -}}
+    {{- if has $entry.name $protected -}}{{- $result = append $result $entry -}}
+    {{- else if hasKey $byName $entry.name -}}{{- $result = append $result (get $byName $entry.name) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $entry := $current -}}
+    {{- if and (not (hasKey $seen $entry.name)) (not (has $entry.name $protected)) -}}
+      {{- $result = append $result $entry -}}
+    {{- end -}}
+  {{- end -}}
+  {{- toYaml $result -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "convertigo.defaultEnvironment_convertigo" -}}
+{{- $embeddedRedis := and (eq (include "convertigo.sessionStoreMode" .) "redis") .Values.redis.enabled -}}
+{{- $prior := include "convertigo.previousEnvironment" (list . "-convertigo") | fromJson -}}
+{{- $javaOpts := "" -}}
+{{- if $prior.found -}}
+  {{- range $prior.env -}}{{- if eq .name "JAVA_OPTS" -}}{{- $javaOpts = .value -}}{{- end -}}{{- end -}}
+{{- else -}}{{- $javaOpts = include "convertigo.javaOpts" . -}}{{- end -}}
+{{- if and $embeddedRedis (include "convertigo.legacyCredentials" .) }}
+{{- include "convertigo.redisPasswordEnv" . | trim | nindent 0 }}
+{{- end }}
+- name: JAVA_OPTS
+  value: {{ $javaOpts | quote }}
+- name: JXMX
+  value: '{{ .Values.image.jxmx }}'
+- name: LOG_STDOUT
+  value: "true"
+- name: LOG_FILE
+  value: "true"
+- name: COOKIE_PATH
+  value: "/convertigo"
+- name: COOKIE_SECURE
+  value: "{{ .Values.ssl_only }}"
+- name: COOKIE_SAMESITE
+  value: lax
+- name: SESSION_TIMEOUT
+  value: "30"
+- name: DISABLE_SUDO
+  value: "false"
+- name: PUBLIC_DOMAINS
+  value: {{ include "convertigo.publicDomains" . | quote }}
+- name: BASEROW_PUBLIC_URL
+  value: {{ include "convertigo.baserowPublicUrl" . | quote }}
+{{- end -}}
+
+{{- define "convertigo.defaultEnvironment_timescale" -}}
+{{- $prior := include "convertigo.previousEnvironment" (list . "-timescale") | fromJson -}}
+{{- if $prior.found -}}{{- toYaml $prior.env -}}{{- else -}}
+- name: PGDATA
+  value: /var/lib/postgresql/data/pgdata
+- name: POSTGRES_PASSWORD
+  {{- if and (include "convertigo.legacyCredentials" .) (not .Values.timescaledb.existingSecret) }}
+  value: {{ .Values.timescaledb.password | quote }}
+  {{- else }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "convertigo.timescaleSecretName" . }}
+      key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
+  {{- end }}
+- name: POSTGRES_USER
+  value: "{{ .Values.timescaledb.user }}"
+- name: BILLING_DB
+  value: "{{ .Values.timescaledb.billing_database }}"
+- name: BILLING_PASSWORD
+  {{- if and (include "convertigo.legacyCredentials" .) (not .Values.timescaledb.existingSecret) }}
+  value: {{ .Values.timescaledb.billing_password | quote }}
+  {{- else }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "convertigo.timescaleSecretName" . }}
+      key: {{ default "billing-password" .Values.timescaledb.existingSecretBillingPasswordKey }}
+  {{- end }}
+- name: BILLING_USER
+  value: "{{ .Values.timescaledb.billing_user }}"
+- name: BASEROW_DB
+  value: "{{ .Values.baserow.baserow_db }}"
+- name: BASEROW_USER
+  value: "{{ .Values.baserow.baserow_user }}"
+- name: BASEROW_PASSWORD
+  {{- if and (include "convertigo.legacyCredentials" .) (not .Values.baserow.existingSecret) }}
+  value: {{ .Values.baserow.baserow_password | quote }}
+  {{- else }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "convertigo.baserowDatabaseSecretName" . }}
+      key: {{ default "baserow-database-password" .Values.baserow.existingSecretPasswordKey }}
+  {{- end }}
+
+{{- end -}}
+{{- end -}}
+
+{{- define "convertigo.defaultEnvironment_br" -}}
+{{- $c8oforms := include "convertigo.baserowC8oforms" . | fromJson -}}
+{{- include "convertigo.baserowDatabaseEnv" . | nindent 0 }}
+- name: BASEROW_EXTRA_ALLOWED_HOSTS
+  value: "*"
+{{- if $c8oforms.enabled }}
+# Next to the mount: a container with the variable and without the file does not start.
+- name: BASEROW_PLUGIN_URLS
+  value: {{ printf "file:///c8o-plugins/%s" $c8oforms.archive | quote }}
+# The image installs the plugin with pip, by default in an isolated build environment that downloads
+# setuptools from PyPI: without Internet access, Baserow would not start. "false" (sic, pip inverts
+# this variable) builds it with the setuptools of the image instead, offline.
+- name: PIP_NO_BUILD_ISOLATION
+  value: "false"
+{{- end }}
+{{- end -}}
+
+{{- define "convertigo.defaultEnvironment_cdb" -}}
+{{- $prior := include "convertigo.previousEnvironment" (list . "-cdb") | fromJson -}}
+{{- if $prior.found -}}{{- toYaml $prior.env -}}{{- else -}}
+- name: COUCHDB_USER
+  {{- if and (not (include "convertigo.legacyCredentials" .)) .Values.couchdb.existingSecretUsernameKey }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "convertigo.couchSecretName" . }}
+      key: {{ .Values.couchdb.existingSecretUsernameKey }}
+  {{- else }}
+  value: {{ include "convertigo.couchdbUsername" . | quote }}
+  {{- end }}
+- name: COUCHDB_PASSWORD
+  {{- if include "convertigo.legacyCredentials" . }}
+  value: {{ include "convertigo.couchdbPassword" . | quote }}
+  {{- else }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "convertigo.couchSecretName" . }}
+      key: {{ default "couchdb-password" .Values.couchdb.existingSecretPasswordKey }}
+  {{- end }}
+{{- end -}}
 {{- end -}}

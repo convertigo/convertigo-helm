@@ -36,20 +36,7 @@ spec:
             - name: cdb-data
               mountPath: /opt/couchdb/data
           env:
-            - name: COUCHDB_USER
-              {{- if .Values.couchdb.existingSecretUsernameKey }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "convertigo.couchSecretName" . }}
-                  key: {{ .Values.couchdb.existingSecretUsernameKey }}
-              {{- else }}
-              value: {{ .Values.couchdb.admin | quote }}
-              {{- end }}
-            - name: COUCHDB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "convertigo.couchSecretName" . }}
-                  key: {{ default "couchdb-password" .Values.couchdb.existingSecretPasswordKey }}
+            {{- include "convertigo.componentEnvironment" (list . "-cdb" (include "convertigo.defaultEnvironment_cdb" .) (list "COUCHDB_USER" "COUCHDB_PASSWORD")) | nindent 12 }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

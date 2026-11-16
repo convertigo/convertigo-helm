@@ -97,7 +97,7 @@ and values if required; do not restore or delete persistent data automatically. 
 does not undo database/project migrations or a credential change: plan those steps separately.
 
 
-Before upgrading an older installation, follow `../../docs/installation-credentials.md` and retain its
-current effective passphrase. `credentials.adoptExisting` is not a rotation operation and must only
-be enabled after an approved private inventory and matching Secret preparation. Never generate new
-database passwords for existing PVCs as part of a routine chart upgrade.
+Before upgrading an older installation, follow `../../docs/installation-credentials.md`. Normal
+upgrades retain established Secrets and values, do not require adoption, and never initialize
+accounts or change the effective passphrase. Review any later production credential migration
+individually. Never generate replacement passwords for existing PVCs during a routine upgrade.

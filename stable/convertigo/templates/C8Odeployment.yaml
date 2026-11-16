@@ -1,3 +1,4 @@
+{{- $fresh := not (include "convertigo.existingInstallation" .) -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
 {{- /* Preserve the old init container when --reuse-values omits this new setting. */ -}}
 {{- $workspaceOwnershipInitEnabled := dig "enabled" true (.Values.workspaceOwnershipInit | default dict) -}}
@@ -55,6 +56,7 @@ spec:
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if $fresh }}
         - name: admin-credential
           secret:
             secretName: {{ include "convertigo.adminSecretName" . }}
@@ -103,6 +105,7 @@ spec:
                     - key: {{ default "redis-password" .Values.redis.auth.existingSecretPasswordKey }}
                       path: redis-password
               {{- end }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           {{- if $redisPasswordFile }}
@@ -128,28 +131,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
-            - name: JAVA_OPTS
-              value: {{ include "convertigo.javaOpts" . | quote }}
-            - name: JXMX
-              value: '{{ .Values.image.jxmx }}'
-            - name: LOG_STDOUT
-              value: "true"
-            - name: LOG_FILE
-              value: "true"
-            - name: COOKIE_PATH
-              value: "/convertigo"
-            - name: COOKIE_SECURE
-              value: "{{ .Values.ssl_only }}"
-            - name: COOKIE_SAMESITE
-              value: lax
-            - name: SESSION_TIMEOUT
-              value: "30"
-            - name: DISABLE_SUDO
-              value: "false"
-            - name: PUBLIC_DOMAINS
-              value: {{ include "convertigo.publicDomains" . | quote }}
-            - name: BASEROW_PUBLIC_URL
-              value: {{ include "convertigo.baserowPublicUrl" . | quote }}
+            {{- include "convertigo.componentEnvironment" (list . "-convertigo" (include "convertigo.defaultEnvironment_convertigo" .) (list "JAVA_OPTS" "REDIS_PASSWORD" "REDIS_PASSWORD_FILE")) | nindent 12 }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -215,9 +197,10 @@ spec:
           volumeMounts:
             - name: c8o-workspace
               mountPath: /workspace
-            - name: c8o-install-car-files
+            - name: {{ include "convertigo.fullname" . }}-workspace-setup
               mountPath: /home/convertigo/scripts
               readOnly: true
+            {{- if $fresh }}
             - name: admin-credential
               mountPath: /run/convertigo-admin
               readOnly: true
@@ -227,6 +210,7 @@ spec:
             - name: credential-bootstrap
               mountPath: /bootstrap
               readOnly: true
+            {{- end }}
         {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -17,9 +17,11 @@ RWX setup and not a highly available storage service.
   `platform-admin` (`password`), `platform-redis` (`redis-password`), `platform-couchdb`
   (`username`, `password`), and `platform-database` (`postgres-password`, `billing-password`,
   `baserow-password`). Password file bytes must not include an unintended trailing newline.
-  Also provide `platform-installation` (`crypto-passphrase`, `baserow-admin-password`).
-  These are example names, not pre-existing credentials. A new passphrase requires a qualified engine
-  and explicit `crypto.engineCompatibilityConfirmed=true`; it is not enabled by this example.
+  Also provide `platform-installation` (`baserow-admin-password`).
+  These are example names, not pre-existing credentials. The engine default phrase is retained;
+  no phrase is generated. A custom phrase requires `crypto.passphrase` or `crypto.existingSecret`
+  explicitly and a qualified engine with `crypto.engineCompatibilityConfirmed=true`. This example
+  does not opt in to a custom phrase.
 
 Render and lint locally before any installation, using `values.yaml`. Replace the example hostname,
 classes and Secret names. The chart metadata remains on the current published engine version until

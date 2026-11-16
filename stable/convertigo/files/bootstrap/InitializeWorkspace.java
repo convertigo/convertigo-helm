@@ -5,6 +5,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.util.*;
 import com.twinsoft.convertigo.engine.util.Crypto2;
+import net.bytebuddy.jar.asm.*;
 
 /** Apply installation configuration from mounted files before the engine starts. */
 class InitializeWorkspace {
@@ -54,10 +55,12 @@ class InitializeWorkspace {
                 || Files.exists(workspace.resolve(".chart-install-complete"));
             // Existing workspaces are never an invitation to rewrite identity or credentials.
             if (existing) return;
-            if (!existing && !env("BOOTSTRAP_CRYPTO_COMPATIBLE", "false").equals("true"))
+            boolean custom = env("BOOTSTRAP_CUSTOM_PASSPHRASE", "false").equals("true");
+            if (custom && !env("BOOTSTRAP_CRYPTO_COMPATIBLE", "false").equals("true"))
                 throw new IOException("Engine passphrase compatibility must be confirmed before new initialization");
-            state.setProperty("mode", existing ? "existing" : "new");
-            if (!existing) state.setProperty("fingerprint", fingerprint(credential("crypto-passphrase")));
+            state.setProperty("mode", "new");
+            state.setProperty("crypto.mode", custom ? "custom" : "default");
+            if (custom) state.setProperty("fingerprint", fingerprint(credential("crypto-passphrase")));
             for (String key : List.of("baserow-admin-password", "billing-password", "postgres-password", "couchdb-password"))
                 state.setProperty("credential." + key, fingerprint(credential(key)));
             if (env("BOOTSTRAP_REDIS_PASSWORD", "false").equals("true"))
@@ -70,13 +73,21 @@ class InitializeWorkspace {
                 throw new IOException("Installation credential identity changed");
         }
         if (state.getProperty("mode").equals("new")) {
-            String phrase = credential("crypto-passphrase");
-            if (phrase.length() < 32 || !fingerprint(phrase).equals(state.getProperty("fingerprint")))
-                throw new IOException("Installation passphrase identity changed");
-            String prior = engine.getProperty("crypto.passphrase");
-            if (prior != null && !prior.equals(phrase))
-                throw new IOException("Existing passphrase differs from installation identity");
-            engine.setProperty("crypto.passphrase", phrase);
+            boolean custom = env("BOOTSTRAP_CUSTOM_PASSPHRASE", "false").equals("true");
+            String mode = state.getProperty("crypto.mode", state.containsKey("fingerprint") ? "custom" : "default");
+            if (!mode.equals(custom ? "custom" : "default"))
+                throw new IOException("Installation passphrase mode changed");
+            if (custom) {
+                String phrase = credential("crypto-passphrase");
+                if (!fingerprint(phrase).equals(state.getProperty("fingerprint")))
+                    throw new IOException("Installation passphrase identity changed");
+                String prior = engine.getProperty("crypto.passphrase");
+                if (prior != null && !prior.equals(phrase))
+                    throw new IOException("Existing passphrase differs from installation identity");
+                engine.setProperty("crypto.passphrase", phrase);
+            } else if (engine.containsKey("crypto.passphrase")) {
+                throw new IOException("Unexpected explicit passphrase during default initialization");
+            }
             engine.putIfAbsent("log4j.logger.cems.Context", "WARN");
         } else if (!state.getProperty("mode").equals("existing")) {
             throw new IOException("Unknown installation identity");
@@ -97,11 +108,57 @@ class InitializeWorkspace {
             setCredential("session.redis.password", "redis-password");
         store(configuration.resolve("engine.properties"), engine);
     }
+    static String engineDefaultPassphrase() throws IOException {
+        // Read the selected library's constant metadata without initializing Engine or its services.
+        // PropertyName initializes other engine classes, so calling its enum accessor is unsuitable here.
+        String resource = "com/twinsoft/convertigo/engine/EnginePropertiesManager$PropertyName.class";
+        String[] result = new String[1];
+        try (InputStream in = InitializeWorkspace.class.getClassLoader().getResourceAsStream(resource)) {
+            if (in == null) throw new IOException("Engine property metadata is unavailable");
+            new ClassReader(in).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override public MethodVisitor visitMethod(int access, String name, String descriptor,
+                        String signature, String[] exceptions) {
+                    if (!name.equals("<clinit>")) return null;
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        boolean next;
+                        String candidate;
+                        @Override public void visitLdcInsn(Object value) {
+                            if (next) {
+                                if (!(value instanceof String)) throw new IllegalStateException();
+                                candidate = (String) value;
+                                next = false;
+                            } else if ("crypto.passphrase".equals(value)) next = true;
+                        }
+                        @Override public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
+                            if (opcode == Opcodes.PUTSTATIC && owner.equals(resource.substring(0, resource.length() - 6))
+                                    && name.equals("CRYPTO_PASSPHRASE")) {
+                                if (candidate == null || candidate.isEmpty() || result[0] != null)
+                                    throw new IllegalStateException();
+                                result[0] = candidate;
+                            }
+                        }
+                    };
+                }
+            }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        }
+        if (result[0] == null) throw new IOException("Engine default property could not be resolved");
+        return result[0];
+    }
     static void symbols() throws Exception {
         if (!state.getProperty("mode", "").equals("new")) return;
-        String phrase = engine.getProperty("crypto.passphrase");
-        if (phrase == null || !fingerprint(phrase).equals(state.getProperty("fingerprint")))
-            throw new IOException("Installation passphrase identity is unavailable");
+        String mode = state.getProperty("crypto.mode", state.containsKey("fingerprint") ? "custom" : "default");
+        if (!mode.equals(env("BOOTSTRAP_CUSTOM_PASSPHRASE", "false").equals("true") ? "custom" : "default"))
+            throw new IOException("Installation passphrase mode changed during initialization");
+        String phrase;
+        if (mode.equals("default")) {
+            if (engine.containsKey("crypto.passphrase"))
+                throw new IOException("Unexpected explicit passphrase during symbol initialization");
+            phrase = engineDefaultPassphrase();
+        } else if (mode.equals("custom")) {
+            phrase = engine.getProperty("crypto.passphrase");
+            if (phrase == null || !fingerprint(phrase).equals(state.getProperty("fingerprint")))
+                throw new IOException("Installation passphrase identity is unavailable");
+        } else throw new IOException("Unknown installation passphrase mode");
         Path path = configuration.resolve("global_symbols.properties");
         Properties symbols = load(path);
         String adminPassword = credential("baserow-admin-password");

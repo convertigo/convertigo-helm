@@ -39,7 +39,10 @@ credentials:
   existingSecret: ""
   adoptExisting: false # Deprecated compatibility field; upgrades never require or apply adoption.
 crypto:
-  # Enable only after the selected engine build has been qualified with installation-specific passphrases.
+  # Empty by default: use the engine default, without writing crypto.passphrase.
+  # A custom phrase is opt-in through this value OR an explicit Secret. Prefer a Secret in production.
+  passphrase: ""
+  # Applies only to an explicitly selected custom phrase and a qualified engine build.
   engineCompatibilityConfirmed: false
   existingSecret: ""
   passphraseKey: crypto-passphrase

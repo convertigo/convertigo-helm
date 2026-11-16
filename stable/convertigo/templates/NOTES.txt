@@ -38,7 +38,9 @@ remain accepted; no automatic credential adoption or account initialization runs
 Keep credential Secrets with their persistent data. Existing productions need a separately approved,
 case-by-case plan for any future credential change.
 
-{{- if and (not (include "convertigo.existingInstallation" .)) (not (.Values.crypto | default dict).engineCompatibilityConfirmed) }}
-New workspace passphrase initialization is currently disabled. Qualify the selected engine build
-before enabling crypto.engineCompatibilityConfirmed; do not use this switch to rotate existing data.
+The engine default passphrase is retained by default, including on first installation. No phrase is
+generated. A custom phrase requires crypto.passphrase or crypto.existingSecret explicitly.
+{{- if and (not (include "convertigo.existingInstallation" .)) (include "convertigo.customPassphrase" .) (not (.Values.crypto | default dict).engineCompatibilityConfirmed) }}
+The explicitly selected custom phrase requires engine qualification before initialization.
+Do not enable crypto.engineCompatibilityConfirmed to rotate existing data.
 {{- end }}

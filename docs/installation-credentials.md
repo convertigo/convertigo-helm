@@ -6,11 +6,10 @@ running instance. Use a separately approved inventory and migration plan for exi
 ## Fresh installations
 
 `credentials.existingSecret` is empty by default. The chart generates a retained installation Secret
-and reuses it on subsequent Helm operations through `lookup`. Its independent keys are:
+and reuses it on subsequent Helm operations through `lookup`. Its six independent password keys are:
 
 | Key | Consumer |
 | --- | --- |
-| crypto-passphrase | Engine workspace initialization, new workspaces only |
 | baserow-admin-password | Baserow account init and encrypted engine symbol |
 | postgres-password | PostgreSQL initialization and engine billing connection |
 | billing-password | Billing user creation and encrypted billing symbol |
@@ -24,8 +23,17 @@ them with the workspace and database backups. A reinstall onto retained data is 
 For offline/GitOps deployments, provide explicit stable Secrets rather than relying on client-side
 random rendering or unavailable `lookup` results.
 
-`crypto.existingSecret`/`passphraseKey` can select another phrase file. Component `existingSecret`
-settings and key mappings can select another password source. All references are namespace-local;
+No encryption phrase is generated, including on a fresh installation. With default values the
+workspace has no crypto.passphrase property and the engine keeps its own default.
+
+A custom phrase is opt-in only: provide `crypto.passphrase` OR `crypto.existingSecret` with
+`crypto.passphraseKey` (default `crypto-passphrase`). Prefer a Secret in production. An explicitly
+supplied value is stored in a separate retained `<fullname>-crypto` Secret; it is never randomly
+generated. An external Secret is referenced without copying its data. When both settings are supplied,
+the explicit Secret takes precedence. A phrase present only in `credentials.existingSecret` does not
+select custom mode: use the crypto settings explicitly. The default path mounts no phrase file.
+
+Component `existingSecret` settings and key mappings can select another password source. All references are namespace-local;
 they do not copy data from another namespace. Inline fields remain available for compatibility.
 Historical inline password fields remain accepted. On a fresh installation, explicitly supplied
 values populate the installation Secret instead of being replaced by random ones. Upgrades retain
@@ -33,16 +41,19 @@ established values and references; a missing generated Secret is never created d
 The chart does not require an adoption flag or a private inventory to perform a normal upgrade.
 Required credentials for a new initialization must be present; no old workspace is initialized.
 
-New phrase initialization is disabled until `crypto.engineCompatibilityConfirmed=true` is explicitly
-selected for a qualified engine build. The current prepared image/version must not be interpreted as
-proof of compatibility. Qualification includes startup, billing initialization, user roles, project
+Only an explicitly selected custom phrase is gated by `crypto.engineCompatibilityConfirmed=true`
+for a qualified engine build. This flag alone does not opt into custom mode or generate any phrase.
+Default-phrase installations do not require this flag. The current prepared image/version is not
+proof of compatibility with a custom phrase. Qualification includes startup, billing initialization, user roles, project
 symbols and the full Baserow/NoCode account flow. No engine or account is started by the chart tests.
 
 The bootstrap sources require Java 17+ and the matching engine libraries. The Baserow CLI/model
 contract is prepared for the pinned 1.34.5 image and still needs an isolated runtime qualification.
 
-The workspace init invokes the engine library's `Crypto2` with the explicit installation phrase,
-reading input files rather than command-line secrets. It writes private Java properties and generated
+The workspace init invokes the engine library's `Crypto2` using either its default phrase or the
+explicitly selected phrase read from a mounted file, never a command-line secret. Default metadata
+is read from the selected engine library without initializing the engine; its value is not copied into
+the chart, a generated Secret, or engine.properties. It writes private Java properties and generated
 symbol values atomically. No fixed symbol ciphertext is included in the chart. Empty placeholders
 are omitted and project defaults apply; empty `.secret` properties must not be fabricated manually.
 The init's identity marker rejects a changed phrase or credential bundle. There is no automatic
@@ -100,6 +111,7 @@ Run `python3 tests/upgrade-credentials.py`. It performs real `helm upgrade --dry
 chart. It never uses a real cluster configuration or starts an engine. Cases include historical
 values with no credential Secret, existing CouchDB/Redis Secrets, minimal saved credential values,
 and Redis with and without AUTH. Existing environments/references are compared exactly; generated
-Secrets are reused byte for byte, including extra keys; unrelated JXMX changes remain effective. The rendered installer is exercised on
+Secrets are reused byte for byte, including extra keys and an explicitly supplied custom-phrase
+Secret; unrelated JXMX changes remain effective. The rendered installer is exercised on
 synthetic retained workspace files, checking unchanged contents and modes and no credential CLI call.
 This tests upgrade rendering and workspace credential preservation, not live production availability.

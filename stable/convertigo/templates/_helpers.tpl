@@ -483,7 +483,14 @@ Compose JAVA_OPTS for the main Convertigo container.
 {{- $name := printf "%s-credentials" (include "convertigo.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- default $name $cfg.existingSecret -}}
 {{- end -}}
-{{- define "convertigo.cryptoSecretName" -}}{{- default (include "convertigo.installationSecretName" .) (.Values.crypto | default dict).existingSecret -}}{{- end -}}
+{{/* No custom phrase is inferred from the general installation Secret. */}}
+{{- define "convertigo.customPassphrase" -}}
+{{- $crypto := .Values.crypto | default dict -}}
+{{- if or $crypto.passphrase $crypto.existingSecret -}}true{{- end -}}
+{{- end -}}
+{{- define "convertigo.cryptoSecretName" -}}
+{{- default (printf "%s-crypto" (include "convertigo.fullname" .) | trunc 63 | trimSuffix "-") (.Values.crypto | default dict).existingSecret -}}
+{{- end -}}
 {{- define "convertigo.baserowAdminSecretName" -}}{{- default (include "convertigo.installationSecretName" .) ((.Values.baserow.admin | default dict).existingSecret) -}}{{- end -}}
 {{- define "convertigo.timescaleSecretName" -}}{{- default (include "convertigo.installationSecretName" .) .Values.timescaledb.existingSecret -}}{{- end -}}
 {{- define "convertigo.baserowDatabaseSecretName" -}}{{- default (include "convertigo.installationSecretName" .) .Values.baserow.existingSecret -}}{{- end -}}

@@ -48,6 +48,7 @@ data:
       done
     }
     ADMIN_SECRET_FILE="${ADMIN_SECRET_FILE:-/run/convertigo-admin/password}"
+    export BOOTSTRAP_CUSTOM_PASSPHRASE="{{ if include "convertigo.customPassphrase" . }}true{{ else }}false{{ end }}"
     export BOOTSTRAP_CRYPTO_COMPATIBLE="{{ if (.Values.crypto | default dict).engineCompatibilityConfirmed }}true{{ else }}false{{ end }}"
     export WORKSPACE
     export BOOTSTRAP_COUCH_USER={{ .Values.couchdb.admin | quote }}

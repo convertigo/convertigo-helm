@@ -71,12 +71,13 @@ spec:
           projected:
             defaultMode: 0444
             sources:
+              {{- if include "convertigo.customPassphrase" . }}
               - secret:
                   name: {{ include "convertigo.cryptoSecretName" . }}
-                  optional: true
                   items:
                     - key: {{ default "crypto-passphrase" (.Values.crypto | default dict).passphraseKey }}
                       path: crypto-passphrase
+              {{- end }}
               - secret:
                   name: {{ include "convertigo.baserowAdminSecretName" . }}
                   items:

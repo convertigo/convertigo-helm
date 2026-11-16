@@ -212,5 +212,17 @@ with tempfile.TemporaryDirectory(prefix='helm-upgrade-credentials-') as tmp:
         unchanged=docs(template(CHART,{},True,True))
         assert {path_for(d):d['data'] for d in unchanged if d['kind']=='Secret'}==secrets_before
         print('PASS generated Secrets reused byte-for-byte; changed credential values cannot rotate existing component environments')
+        # Custom phrases are supplied explicitly and retained without replacing data on future upgrades.
+        API.objects={}
+        custom=docs(template(CHART,{'crypto':{'passphrase':secrets.token_hex(24)}},False,False))
+        for obj in custom:
+            if obj['kind'] in KIND: API.objects[path_for(obj)]=obj
+        custom_data={path_for(d):d['data'] for d in custom if d['kind']=='Secret'}
+        assert len(custom_data)==3
+        for configuration in [{},{'crypto':{'passphrase':secrets.token_hex(24)}}]:
+            after=docs(template(CHART,configuration,True,True))
+            assert {path_for(d):d['data'] for d in after if d['kind']=='Secret'}==custom_data
+        print('PASS custom phrase Secret is explicitly supplied once and retained unchanged on upgrade')
+
     finally:
         server.shutdown();server.server_close();thread.join()

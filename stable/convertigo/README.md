@@ -770,16 +770,19 @@ but introduces a planned outage; retain a tested database backup/rollback proced
 
 ## Installation credentials and upgrades
 
-A fresh installation generates a retained Secret with independent values for the encryption
-passphrase, Baserow administrator, PostgreSQL administrator, billing database, Baserow database,
-CouchDB and embedded Redis. `credentials.existingSecret` selects a managed Secret instead. Individual
+A fresh installation generates a retained Secret with independent passwords for the Baserow
+administrator, PostgreSQL administrator, billing database, Baserow database, CouchDB and embedded
+Redis. The encryption phrase is never generated; by default the engine keeps its own default and
+no crypto.passphrase property is written. `credentials.existingSecret` selects a managed Secret instead. Individual
 component Secret settings can override their reference; see [installation credentials](../../docs/installation-credentials.md) for
 keys and upgrade behavior. Keep these Secrets with all persistent data; do not regenerate them
 on upgrade, reinstall or restoration. GitOps rendering should always use explicit stable Secrets.
 
-New passphrase initialization is gated by `crypto.engineCompatibilityConfirmed`, false by default.
-Set it only after the chosen engine build has passed qualification with installation-specific
-passphrases. The prepared chart metadata still targets the published image; a successful render
+A custom phrase requires `crypto.passphrase` or `crypto.existingSecret` explicitly. A supplied value
+is kept in a separate Secret; an external Secret is only referenced. Custom initialization is also
+gated by `crypto.engineCompatibilityConfirmed`, false by default, until the chosen engine build is
+qualified. The flag alone does not select a custom phrase. Default-phrase installation does not
+require this flag. The prepared chart metadata still targets the published image; a successful render
 is not a qualification of a new passphrase on that engine. Existing workspaces retain their current
 phrase, including the absence of an explicit property. They are never re-encrypted by this chart.
 

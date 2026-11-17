@@ -723,3 +723,13 @@ JAVA_OPTS is atomic because historical credentials can be embedded in arbitrary 
   {{- end }}
 {{- end -}}
 {{- end -}}
+
+{{/* A new default database tag must not upgrade an existing database implicitly. */}}
+{{- define "convertigo.timescaleImage" -}}
+{{- $image := printf "%s:%s" .Values.timescaledb.image.repository .Values.timescaledb.image.tag -}}
+{{- if include "convertigo.existingInstallation" . -}}
+  {{- $prior := lookup "apps/v1" "Deployment" .Release.Namespace (printf "%s-timescale" (include "convertigo.fullname" .)) -}}
+  {{- if $prior -}}{{- $image = (first $prior.spec.template.spec.containers).image -}}{{- end -}}
+{{- end -}}
+{{- $image -}}
+{{- end -}}

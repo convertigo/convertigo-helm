@@ -66,7 +66,7 @@ Find below the values.yaml customization options :
 | redis.podAnnotations, podSecurityContext, securityContext, nodeSelector, tolerations, affinity | | Pod settings of the Redis pods. |
 | redis.extraVolumes, extraVolumeMounts, extraContainers, extraInitContainers | [] | Additional volumes and containers of the Redis pods, for example a Vault agent. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
-| nocodestudio.version              | 2.1.14                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
+| nocodestudio.version              | 2.1.23                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
 | publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
 | publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
@@ -79,7 +79,7 @@ Find below the values.yaml customization options :
 | workspace.accessModes             | ["ReadWriteOnce"]      | AccessModes for Convertigo workspace PVC. |
 | timescaledb.enabled               | true                   | Required for usage and license billing. Set to false only if using an external TimescaleDB. |
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
-| timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
+| timescaledb.image.tag             | 2.32.0-pg16           | Pinned fresh-install image, PostgreSQL 16. Existing database images are preserved on upgrade. |
 | timescaledb.user                  | postgres               | Database username Convertigo will use to connect to TimescaleDB. Customize as needed. |
 | timescaledb.password | | Historical values remain accepted; use generated or existing credentials. |
 | timescaledb.billing_database      | c8oAnalytics           | Database name for storing usage analytics data. |
@@ -193,7 +193,7 @@ one of the new release, update `c8oforms.json` (release, commit, sha256, tested 
 versions) and the archive name in `values.yaml` and this README.
 
 To exercise the upgrade without Kubernetes, first pull `baserow/baserow:1.30.1`,
-`baserow/baserow:1.34.5` and `timescale/timescaledb:latest-pg16`, then run
+`baserow/baserow:1.34.5` and `timescale/timescaledb:2.32.0-pg16`, then run
 `python3 tests/baserow-upgrade.py`. It uses an internal Docker network, the chart's rendered
 startup command and plugin archive, and disposable credentials. It verifies linked rows,
 formulas, token continuity, migrations, aggregations, restart and plugin removal. Containers
@@ -798,3 +798,10 @@ Routine upgrades never generate or rotate credentials or change crypto.passphras
 environments are preserved through lookup; encrypted workspace files are untouched. Productions
 will be reviewed individually rather than requiring an adoption step before a normal upgrade.
 See `tests/upgrade-credentials.py` for offline server-dry-run regression cases using synthetic data.
+
+## Preparing an 8.4.8 upgrade
+
+Read [the 8.4.8 upgrade notes](../../docs/upgrading-848.md), including the separate approved removal
+of a previously installed AwsMetering project and preservation of existing database images/data.
+Changing nocodestudio.version selects the archive for a new workspace; it does not replace an
+existing C8oForms project or its local adaptations automatically.

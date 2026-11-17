@@ -24,8 +24,7 @@ RWX setup and not a highly available storage service.
   does not opt in to a custom phrase.
 
 Render and lint locally before any installation, using `values.yaml`. Replace the example hostname,
-classes and Secret names. The chart metadata remains on the current published engine version until
-its release is approved. There is no implicit dependency on AWS instance metadata: AWS Marketplace
+classes and Secret names. The local candidate metadata is 8.4.8; publication remains a separate decision. There is no implicit dependency on AWS instance metadata: AWS Marketplace
 project installation is opt-in. On a previously initialized workspace, separately review/remove an
 already-installed `AwsMetering` project; the chart preserves existing projects and does not delete it.
 
@@ -103,3 +102,13 @@ Before upgrading an older installation, follow `../../docs/installation-credenti
 upgrades retain established Secrets and values, do not require adoption, and never initialize
 accounts or change the effective passphrase. Review any later production credential migration
 individually. Never generate replacement passwords for existing PVCs during a routine upgrade.
+
+## Local 8.4.8 rehearsal
+
+Layer `values-replay-848.yaml` after this provider's `values.yaml` for a new isolated rehearsal,
+not for an existing installation. It selects a pinned CI beta image and generated first-install
+credentials, retaining the default engine phrase. Replace the provisional baseline with the approved
+CI build before qualification. See [the rehearsal kit](../../docs/replay-848.md) and
+[the upgrade notes](../../docs/upgrading-848.md) for version/data constraints and the separate
+approved removal of an erroneously installed AwsMetering project. No cluster action is authorized
+by these example files.

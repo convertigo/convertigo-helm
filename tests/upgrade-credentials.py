@@ -152,10 +152,15 @@ with tempfile.TemporaryDirectory(prefix='helm-upgrade-credentials-') as tmp:
                 '--dry-run=server','--disable-openapi-validation','-o','json'],env))['manifest'])
             ordinary_byname=byname(ordinary)
             for key,obj in b.items():
-                if obj['kind']=='Deployment': assert environment(ordinary_byname[key])==environment(obj), 'Ordinary upgrade changed established credentials'
+                if obj['kind']=='Deployment':
+                    assert environment(ordinary_byname[key])==environment(obj), 'Ordinary upgrade changed established credentials'
+                    if obj['metadata']['name'].endswith('-timescale'):
+                        assert pod(ordinary_byname[key])['containers'][0]['image']==pod(obj)['containers'][0]['image'],'Ordinary upgrade changed database image'
             assert not any(d['kind']=='Secret' for d in ordinary), 'Ordinary upgrade generated a Secret'
             for key,obj in b.items():
                 if obj['kind']=='Deployment':
+                    if obj['metadata']['name'].endswith('-timescale'):
+                        assert pod(a[key])['containers'][0]['image']==pod(obj)['containers'][0]['image'],'Database image changed implicitly'
                     assert environment(a[key])==environment(obj),'Existing component environment changed: '+obj['metadata']['name']
             assert not any(d['kind']=='Secret' for d in after),'An upgrade generated a new Secret'
             for key,obj in a.items():

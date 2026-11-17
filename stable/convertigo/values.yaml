@@ -25,7 +25,7 @@ image:
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
     enable: true
-    version: "2.1.14"
+    version: "2.1.23"
 
 # The generated credential is kept across upgrades. Prefer an existing Secret in production.
 admin:
@@ -360,7 +360,7 @@ timescaledb:
   enabled: true
   image:
     repository: timescale/timescaledb
-    tag: latest-pg16
+    tag: 2.32.0-pg16
   user: postgres
   password: "" # New install: generated/provided; upgrade: keep the established value or Secret
   billing_database: c8oAnalytics

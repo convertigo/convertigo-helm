@@ -99,3 +99,15 @@ with tempfile.TemporaryDirectory(prefix='private-url-default-fixture-') as folde
     assert 'artifacts.example.invalid' not in fallback_script
 
 print('PASS literal full-URL override and no private-source URL accepted for public default publication')
+
+# Optional checksum syntax is enforced at render time; defaults remain backwards compatible.
+assert values['nocodestudio']['archiveSha256']==''
+valid='aB'*32
+checked=render('--set-string','nocodestudio.archiveSha256='+valid)
+checked_script=next(d['data']['installCarFiles.sh'] for d in checked if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
+assert 'NOCODESTUDIO_ARCHIVE_SHA256="'+valid.lower()+'"' in checked_script
+assert checked_script.index('ARCHIVE_ACTUAL_SHA256=$(sha256sum') < checked_script.index('tar xzf')
+for bad in ['abc','g'*64,'a'*63,'a'*65]:
+    p=subprocess.run(['helm','template','rehearsal',str(CHART),'--set-string','nocodestudio.archiveSha256='+bad],capture_output=True,text=True,env=dict(os.environ,KUBECONFIG='/dev/null'))
+    assert p.returncode!=0 and 'archiveSha256' in p.stderr and not p.stdout.strip()
+print('PASS optional archive SHA-256 syntax, normalization and verification before extraction')

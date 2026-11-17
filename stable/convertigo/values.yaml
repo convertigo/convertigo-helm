@@ -29,6 +29,8 @@ nocodestudio:
     # Optional complete HTTPS URL of a compatible standalone tar bundle. Empty keeps public GitHub.
     # Private test URLs belong only in uncommitted overrides, never public chart defaults.
     archiveUrl: ""
+    # Optional SHA-256 of the downloaded tar, checked before extraction.
+    archiveSha256: ""
 
 # The generated credential is kept across upgrades. Prefer an existing Secret in production.
 admin:

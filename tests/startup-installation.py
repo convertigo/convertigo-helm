@@ -167,6 +167,20 @@ print(hashlib.sha512(sys.stdin.buffer.read()).hexdigest()+'  -')
     assert custom_url not in downloaded.stdout+downloaded.stderr
     assert private_count.read_text()=='download\n'
     assert not list(private_workspace.glob('.chart-install.??????'))
+    # Real digest verification of a synthetic tar: failure must precede project extraction/publication.
+    digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+    for label,expected,fail in [('valid',digest.upper(),False),('mismatch','0'*64,True)]:
+        script.write_text(installer(render('--set-string','nocodestudio.archiveSha256='+expected)))
+        target=root/('checksum-'+label);target.mkdir()
+        result=run(env(target,root/('count-'+label)),fail=fail)
+        assert (target/'projects/BaserowIntegration').exists() != fail
+        if fail:
+            assert 'SHA-256 verification failed' in result.stderr
+            assert not (target/'.chart-install-complete').exists()
+            assert not (target/'projects/FixtureLibrary').exists()
+    # A changed checksum has no effect on retained workspaces and triggers no download.
+    run(env(retained,pending_count))
+    assert retained_properties.read_text()=='fixture=keep\n' and not pending_count.exists()
     script.write_text(installer(default))
     workspace = root / 'workspace'; workspace.mkdir(); count = root / 'count'
     run(env(workspace, count, FAIL_DOWNLOAD='1'), fail=True)

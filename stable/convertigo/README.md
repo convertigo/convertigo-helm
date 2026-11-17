@@ -68,6 +68,7 @@ Find below the values.yaml customization options :
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
 | nocodestudio.version              | 2.1.23                 | Public GitHub release tag used when archiveUrl is empty. |
 | nocodestudio.archiveUrl           | empty                  | Optional complete HTTPS standalone tar URL; private test values must never be committed. |
+| nocodestudio.archiveSha256        | empty                  | Optional 64-character hexadecimal SHA-256 of the standalone tar; checked before extraction. |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
 | publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
 | publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
@@ -813,3 +814,8 @@ required tar layout. Keep private sources only in uncommitted overrides outside 
 Any URL in public chart defaults/examples becomes public. Helm release data and rendered ConfigMaps
 also contain an override, so restrict their access and do not share rendered manifests.
 See [the source contract](../../docs/application-release-contract.md).
+
+A nonempty `nocodestudio.archiveSha256` must contain exactly 64 hexadecimal characters (either
+case); malformed values fail Helm rendering. On a fresh application download the init verifies
+the tar before extraction and stops on mismatch. Empty keeps the previous behavior. It does not
+reimport or revalidate applications in retained installations, nor change their projects or credentials.

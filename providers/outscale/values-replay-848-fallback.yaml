@@ -5,3 +5,4 @@ nocodestudio:
   version: "2.2.0-beta349.1"
   # Clear any private full-URL source: URL overrides have precedence over version selection.
   archiveUrl: ""
+  archiveSha256: ""

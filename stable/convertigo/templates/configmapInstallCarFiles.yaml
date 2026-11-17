@@ -1,3 +1,7 @@
+{{- $archiveSha256 := get .Values.nocodestudio "archiveSha256" -}}
+{{- if or (not (kindIs "string" $archiveSha256)) (and $archiveSha256 (not (regexMatch "^[a-fA-F0-9]{64}$" $archiveSha256))) -}}
+{{- fail "nocodestudio.archiveSha256 must be empty or exactly 64 hexadecimal characters" -}}
+{{- end -}}
 {{- $archiveUrl := default "" .Values.nocodestudio.archiveUrl -}}
 {{- if and $archiveUrl (not (regexMatch "^https://[^[:space:]]+$" $archiveUrl)) -}}
 {{- fail "nocodestudio.archiveUrl must be a complete HTTPS URL without whitespace" -}}
@@ -25,6 +29,7 @@ data:
     OWNER_GID={{ include "convertigo.runAsGroupId" . }}
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
     NOCODESTUDIO_ENABLED="{{ if .Values.nocodestudio.enable }}true{{ else }}false{{ end }}"
+    NOCODESTUDIO_ARCHIVE_SHA256={{ $archiveSha256 | lower | quote }}
     NOCODESTUDIO_VERSION={{ default "" .Values.nocodestudio.version | quote }}
     # Shell-quote the literal URL; it is neither exported nor passed as a curl argument.
     NOCODESTUDIO_ARCHIVE_URL={{ $archiveUrl | replace "'" "'\"'\"'" | squote }}
@@ -156,6 +161,13 @@ data:
           exit 1
         }
         unset SOURCE_URL CURL_URL
+        if [[ -n "$NOCODESTUDIO_ARCHIVE_SHA256" ]]; then
+          ARCHIVE_ACTUAL_SHA256=$(sha256sum < "$STAGE/forms.tar.gz")
+          [[ "${ARCHIVE_ACTUAL_SHA256%% *}" == "$NOCODESTUDIO_ARCHIVE_SHA256" ]] || {
+            echo "Application archive SHA-256 verification failed; installation stopped before extraction" >&2
+            exit 1
+          }
+        fi
         tar xzf "$STAGE/forms.tar.gz" --no-same-owner --strip-components=4 -C "$STAGE/projects" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
         publish_projects
       fi

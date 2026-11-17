@@ -5,10 +5,15 @@ are separate actions requiring the environment owner's approval. No action below
 
 ## Versions and existing data
 
-Fresh workspaces use C8oForms 2.1.23 (the stable line), Baserow 1.34.5 and the embedded c8oforms
-plugin 0.3.1. The plugin's archive/hash and its tested 1.34.5 combination are unchanged. A C8oForms
-2.2 beta or a Baserow major upgrade is not selected by this patch. Confirm the application owner's
-choice and qualify the complete first-account/form/data-source flow before release.
+The application release is deliberately unselected while the next public release is pending.
+Set `nocodestudio.version` to its exact published public tag only after the application owner confirms
+its assets and backend requirements. Do not use the retired stable release or invent a private RC
+as a public download tag. See [the application release contract](application-release-contract.md).
+
+Baserow 1.34.5 and plugin 0.3.1 remain the existing baseline, not a compatibility claim for the next
+application release. Their known plugin matrix does not prove that a newer C8oForms application can
+use that backend. Confirm exact Baserow/plugin versions and qualify account/form/data-source flows
+before selecting the final combination. No Baserow major upgrade is made implicitly.
 
 The fresh database image is pinned to `timescale/timescaledb:2.32.0-pg16`, PostgreSQL major 16.
 At preparation time the registry gives it the same index digest as `latest-pg16`; its amd64 image

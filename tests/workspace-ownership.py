@@ -18,7 +18,7 @@ chart = args.chart
 
 
 def render(template, *options, chart_dir=chart):
-    return command('helm', 'template', 'ownership', str(chart_dir), '--show-only',
+    return command('helm', 'template', 'ownership', str(chart_dir), '--set-string', 'nocodestudio.version=fixture-published-release', '--show-only',
                    'templates/' + template, *options)
 
 

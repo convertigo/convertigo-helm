@@ -25,7 +25,9 @@ image:
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
     enable: true
-    version: "2.1.23"
+    # Select the exact public release tag after publication and application-owner confirmation.
+    # No RC or retired stable is selected while the next release is pending.
+    version: ""
 
 # The generated credential is kept across upgrades. Prefer an existing Secret in production.
 admin:

@@ -66,7 +66,7 @@ Find below the values.yaml customization options :
 | redis.podAnnotations, podSecurityContext, securityContext, nodeSelector, tolerations, affinity | | Pod settings of the Redis pods. |
 | redis.extraVolumes, extraVolumeMounts, extraContainers, extraInitContainers | [] | Additional volumes and containers of the Redis pods, for example a Vault agent. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
-| nocodestudio.version              | 2.1.23                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
+| nocodestudio.version              | unset                  | Exact public release tag; required for a new No Code workspace after the pending release is published. |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
 | publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
 | publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
@@ -805,3 +805,11 @@ Read [the 8.4.8 upgrade notes](../../docs/upgrading-848.md), including the separ
 of a previously installed AwsMetering project and preservation of existing database images/data.
 Changing nocodestudio.version selects the archive for a new workspace; it does not replace an
 existing C8oForms project or its local adaptations automatically.
+
+The next application release is pending: no C8oForms stable or RC is selected by this candidate.
+For a new No Code workspace, provide `nocodestudio.version` after its public publication and backend
+confirmation. Empty selection rejects a new No Code manifest before chart resources are
+applied, but an existing workspace is preserved without fetching an unknown release. Local renders/lint use an explicit synthetic tag for contract tests; the raw incomplete defaults
+and the publication guard refuse a new No Code installation.
+See [the publisher contract](../../docs/application-release-contract.md). The existing backend/plugin
+baseline is not an approval of the pending application's compatibility.

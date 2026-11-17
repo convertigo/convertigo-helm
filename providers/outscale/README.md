@@ -108,7 +108,8 @@ individually. Never generate replacement passwords for existing PVCs during a ro
 Layer `values-replay-848.yaml` after this provider's `values.yaml` for a new isolated rehearsal,
 not for an existing installation. It selects a pinned CI beta image and generated first-install
 credentials, retaining the default engine phrase. Replace the provisional baseline with the approved
-CI build before qualification. See [the rehearsal kit](../../docs/replay-848.md) and
+CI build and select the published application tag/backend combination before qualification. Empty
+application selection deliberately prevents new No Code bootstrap and publication. See [the rehearsal kit](../../docs/replay-848.md) and
 [the upgrade notes](../../docs/upgrading-848.md) for version/data constraints and the separate
 approved removal of an erroneously installed AwsMetering project. No cluster action is authorized
 by these example files.

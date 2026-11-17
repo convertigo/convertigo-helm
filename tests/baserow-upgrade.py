@@ -148,7 +148,7 @@ directory.mkdir(parents=True, exist_ok=options.resume_empty_baseline)
 for name in ['postgres', 'data', 'archive', 'plugins']:
     (directory / name).mkdir(exist_ok=options.resume_empty_baseline)
 rendered = run('helm', 'template', 'validation', str(ROOT / 'stable/convertigo'),
-               '--set', 'baserow.plugins.c8oforms.enabled=true')
+               '--set', 'baserow.plugins.c8oforms.enabled=true', '--set', 'nocodestudio.enable=false')
 deployment = next(d for d in rendered.split('\n---\n')
                   if '# Source: convertigo/templates/BRdeployment.yaml' in d)
 container = yaml.safe_load(deployment)['spec']['template']['spec']['containers'][0]

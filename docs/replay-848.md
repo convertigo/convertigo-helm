@@ -6,15 +6,22 @@ context or another environment. Namespace, route, hostname and Secret identities
 
 ## Candidate and values
 
-Package the local branch into an external evidence directory; do not publish it:
+Package the local branch into an external evidence directory; do not publish it. Raw default
+render/lint is intentionally rejected until an application release is selected. For local contract
+tests use `tests/candidate-848.py` with synthetic fixture tags. Only after publication and owner
+confirmation, prepare a private values file with the exact tag and approved backend versions, then
+use it for the following preview (replace the example path):
 
 ```sh
 umask 077
+application_values=/absolute/private/approved-application.yaml
 evidence_dir="$(mktemp -d)"
 KUBECONFIG=/dev/null helm lint stable/convertigo \
-  -f providers/outscale/values.yaml -f providers/outscale/values-replay-848.yaml
+  -f providers/outscale/values.yaml -f providers/outscale/values-replay-848.yaml \
+  -f "$application_values"
 KUBECONFIG=/dev/null helm template rehearsal stable/convertigo \
   -f providers/outscale/values.yaml -f providers/outscale/values-replay-848.yaml \
+  -f "$application_values" \
   > "$evidence_dir/rendered-private.yaml"
 ```
 
@@ -34,6 +41,17 @@ RWX workspace, persistent 3-member Sentinel, and routing through an existing Env
 rehearsal overlay clears the base profile's external Secret refs to exercise generated first-install
 passwords; the engine default phrase remains unchanged. Do not layer it onto retained production data.
 
+## Application selection is pending
+
+`nocodestudio.version` is intentionally empty in defaults and in the overlay. This candidate must
+not bootstrap a new No Code workspace or be published before an exact public release is selected.
+An existing workspace remains untouched when no new application release is selected. No RC tag
+is guessed. The known Baserow/plugin versions are only a baseline until the application owner
+confirms the new release's requirements. See [the publisher contract](application-release-contract.md).
+
+The current initializer consumes `c8oforms_standalone.tar.gz`, not a single CAR. Confirm the actual
+asset set/layout before choosing the tag; a CAR-only release requires an installer adaptation first.
+
 ## Fresh-workspace rehearsal, after approval
 
 1. Use a new dedicated namespace/workspace, leaving the original demo and all other instances intact.
@@ -44,7 +62,7 @@ passwords; the engine default phrase remains unchanged. Do not layer it onto ret
    publication is involved. Record aggregates: init/startup duration, 3 Ready replicas, runtime build
    and digest per pod, zero repeated restarts, completed project migration and green started/projects/
    session-store supervision. Check project/configuration owner counts, not file contents.
-3. Confirm C8oForms 2.1.23 loaded, Baserow 1.34.5 and plugin 0.3.1 loaded, and PostgreSQL 16.15 /
+3. Confirm the selected published C8oForms release and its approved Baserow/plugin versions loaded, and PostgreSQL 16.15 /
    TimescaleDB 2.32.0 in the fresh database. Verify the effective extension through read-only metadata
    if present, rather than changing it to force the expected number. Check that no AwsMetering was
    installed and the route/session settings apply to every replica.
@@ -76,6 +94,7 @@ prune, or delete storage to hide a failed rehearsal.
 
 ## Publication checkpoint
 
-No push, tag or release is implied by version 8.4.8 in Chart.yaml. Publish only after the owner agrees,
+No push, tag or release is implied by version 8.4.8 in Chart.yaml. The current unselected application
+release intentionally fails the publication guard. Publish only after selecting a public tag, the owner agrees,
 engine/application checks are accepted, the official `convertigo:8.4.8` exists and the release-image
 check passes. Provider images/scans and the separate release checklist remain prerequisites.

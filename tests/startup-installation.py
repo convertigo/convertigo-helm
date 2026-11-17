@@ -21,7 +21,7 @@ CHART = Path(__file__).resolve().parents[1] / 'stable/convertigo'
 
 def render(*options):
     return [x for x in yaml.safe_load_all(subprocess.check_output(
-        ['helm', 'template', 'startup', str(CHART), *options], text=True)) if x]
+        ['helm', 'template', 'startup', str(CHART), '--set-string', 'nocodestudio.version=fixture-published-release', *options], text=True)) if x]
 
 
 def engine(docs):
@@ -35,7 +35,7 @@ def installer(docs):
 
 
 def assert_render_failure(*options):
-    p = subprocess.run(['helm', 'template', 'startup', str(CHART), *options],
+    p = subprocess.run(['helm', 'template', 'startup', str(CHART), '--set-string', 'nocodestudio.version=fixture-published-release', *options],
                        capture_output=True, text=True)
     assert p.returncode != 0, 'Invalid administrator option was accepted'
 
@@ -59,6 +59,7 @@ assert '169.254.169.254' not in installer(default)
 assert 'flock -x -w ' in installer(default)
 assert installer(default).rindex('mv -- "$STAGE/complete"') > installer(default).index('find "$PROJECTS_DIR"')
 subprocess.run(['bash', '-n'], input=installer(default), text=True, check=True)
+assert_render_failure('--set-string','nocodestudio.version=')
 assert_render_failure('--set', 'admin.username=bad user')
 assert_render_failure('--set', 'admin.passwordKey=bad:key')
 assert_render_failure('--set-string', 'additionalJavaOpts=-Dconvertigo.engine.admin.password=fixture')
@@ -139,6 +140,17 @@ print(hashlib.sha512(sys.stdin.buffer.read()).hexdigest()+'  -')
     def run(e, fail=False):
         p = subprocess.run(['bash', str(script)], env=e, capture_output=True, text=True)
         assert (p.returncode != 0) if fail else (p.returncode == 0), 'Installer fixture returned unexpected status'
+    pending = root / 'pending-release'; pending.mkdir(); pending_count = root / 'pending-count'
+    script.write_text(installer(default).replace('NOCODESTUDIO_VERSION="fixture-published-release"','NOCODESTUDIO_VERSION=""'))
+    run(env(pending, pending_count),fail=True)
+    assert not pending_count.exists() and not (pending/'configuration').exists()
+    # Retained installations with no selected version do not fetch an unknown application release.
+    retained=root/'retained-release'; (retained/'configuration').mkdir(parents=True)
+    (retained/'projects/FixtureLibrary').mkdir(parents=True)
+    retained_properties=retained/'configuration/engine.properties';retained_properties.write_text('fixture=keep\n')
+    run(env(retained,pending_count))
+    assert retained_properties.read_text()=='fixture=keep\n' and not pending_count.exists()
+    script.write_text(installer(default))
     workspace = root / 'workspace'; workspace.mkdir(); count = root / 'count'
     run(env(workspace, count, FAIL_DOWNLOAD='1'), fail=True)
     assert not (workspace / '.chart-install-complete').exists()

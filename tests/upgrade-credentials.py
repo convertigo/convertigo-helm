@@ -113,6 +113,9 @@ with tempfile.TemporaryDirectory(prefix='helm-upgrade-credentials-') as tmp:
         'current-context':'fixture','users':[{'name':'fixture','user':{}}]}));kube.chmod(0o600)
     env=dict(os.environ,KUBECONFIG=str(kube),HELM_DRIVER='secret')
     def template(chart,values,upgrade=False,live=False):
+        values=json.loads(json.dumps(values))
+        if chart==CHART and not upgrade:
+            values.setdefault('nocodestudio',{}).setdefault('version','fixture-published-release')
         f=directory/'values.yaml';f.write_text(yaml.safe_dump(values));f.chmod(0o600)
         return call(['helm','template',NAME,str(chart),'-n',NS,'-f',str(f),
                      *(['--is-upgrade'] if upgrade else []),

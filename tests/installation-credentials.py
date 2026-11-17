@@ -20,7 +20,7 @@ CHART = Path(__file__).resolve().parents[1] / 'stable/convertigo'
 
 
 def render(*options, failure=False):
-    p = subprocess.run(['helm', 'template', 'credentials', str(CHART), *options],
+    p = subprocess.run(['helm', 'template', 'credentials', str(CHART), '--set-string', 'nocodestudio.version=fixture-published-release', *options],
                        capture_output=True, text=True, env=dict(os.environ, KUBECONFIG='/dev/null'))
     if failure:
         assert p.returncode != 0, 'Unsafe upgrade was accepted'

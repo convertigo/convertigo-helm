@@ -1,3 +1,9 @@
+{{- if and (not (empty .Values.nocodestudio.version)) (not (regexMatch "^[a-zA-Z0-9][a-zA-Z0-9._+-]*$" (toString .Values.nocodestudio.version))) -}}
+{{- fail "nocodestudio.version must be a public release tag" -}}
+{{- end -}}
+{{- if and (not (include "convertigo.existingInstallation" .)) .Values.nocodestudio.enable (dig "enabled" true (.Values.projectInstallation | default dict)) (empty .Values.nocodestudio.version) -}}
+{{- fail "Select and verify a published nocodestudio.version before starting a new No Code installation" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,6 +21,7 @@ data:
     OWNER_GID={{ include "convertigo.runAsGroupId" . }}
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
     NOCODESTUDIO_ENABLED="{{ if .Values.nocodestudio.enable }}true{{ else }}false{{ end }}"
+    NOCODESTUDIO_VERSION={{ default "" .Values.nocodestudio.version | quote }}
     INSTALL_ENABLED="{{ dig "enabled" true (.Values.projectInstallation | default dict) }}"
     METERING_ENABLED="{{ dig "enabled" false (.Values.awsMarketplace | default dict) }}"
     command -v flock >/dev/null || { echo "Workspace setup requires flock" >&2; exit 1; }
@@ -32,11 +39,23 @@ data:
     if [[ -f "$WORKSPACE/.chart-install-complete" ]] || { [[ ! -f "$CONFIG_DIR/.chart-crypto-state" ]] && { [[ -n "$(ls -A "$CONFIG_DIR" 2>/dev/null)" ]] || [[ -n "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]]; }; }; then
       PRESERVE_CREDENTIALS=true
     fi
+    # A new No Code workspace needs an explicitly selected published release. Existing projects
+    # remain untouched when no new version is selected; never request an empty or guessed tag.
+    if [[ "$INSTALL_ENABLED" == true && "$NOCODESTUDIO_ENABLED" == true ]]; then
+      if [[ -z "$NOCODESTUDIO_VERSION" && "$PRESERVE_CREDENTIALS" != true ]]; then
+        echo "Select a published nocodestudio.version before initializing a new No Code workspace" >&2
+        exit 1
+      fi
+      if [[ -n "$NOCODESTUDIO_VERSION" && ! "$NOCODESTUDIO_VERSION" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ ]]; then
+        echo "nocodestudio.version must be a release tag" >&2
+        exit 1
+      fi
+    fi
     mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
     STAGE=$(mktemp -d "$WORKSPACE/.chart-install.XXXXXX")
     trap 'rm -rf -- "$STAGE"' EXIT
     MARKER="$WORKSPACE/.chart-install-complete"
-    SIGNATURE="v2:nocode=$NOCODESTUDIO_ENABLED:{{ .Values.nocodestudio.version }}:install=$INSTALL_ENABLED:metering=$METERING_ENABLED"
+    SIGNATURE="v2:nocode=$NOCODESTUDIO_ENABLED:$NOCODESTUDIO_VERSION:install=$INSTALL_ENABLED:metering=$METERING_ENABLED"
     # Existing projects remain intact. Only complete, staged project directories are published.
     publish_projects() {
       local project
@@ -116,8 +135,8 @@ data:
 
     if [[ "$INSTALL_ENABLED" == true && "$(cat "$MARKER" 2>/dev/null || true)" != "$SIGNATURE" ]]; then
       mkdir -p "$STAGE/projects"
-      if [[ "$NOCODESTUDIO_ENABLED" == true ]]; then
-        curl --fail --location --retry 3 https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz -o "$STAGE/forms.tar.gz"
+      if [[ "$NOCODESTUDIO_ENABLED" == true && -n "$NOCODESTUDIO_VERSION" ]]; then
+        curl --fail --location --retry 3 "https://github.com/convertigo/C8oForms/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz" -o "$STAGE/forms.tar.gz"
         tar xzf "$STAGE/forms.tar.gz" --no-same-owner --strip-components=4 -C "$STAGE/projects" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
         publish_projects
       fi

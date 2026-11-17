@@ -15,7 +15,8 @@ CHART=ROOT/'stable/convertigo'
 metadata=yaml.safe_load((CHART/'Chart.yaml').read_text())
 values=yaml.safe_load((CHART/'values.yaml').read_text())
 assert metadata['version']==metadata['appVersion']=='8.4.8'
-assert values['nocodestudio']['version']=='2.2-rc'
+assert values['nocodestudio']['version']=='2.1.23'
+assert values['nocodestudio']['archiveUrl']==''
 assert values['baserow']['image']['tag']=='1.34.5'
 assert values['timescaledb']['image']['tag']=='2.32.0-pg16'
 assert not values['awsMarketplace']['enabled']
@@ -27,7 +28,7 @@ assert hashlib.sha256((CHART/'files/baserow-plugins'/plugin['archive']).read_byt
 def render(*args, failure=False):
     p=subprocess.run(['helm','template','rehearsal',str(CHART),*args],env=dict(os.environ,KUBECONFIG='/dev/null'),capture_output=True,text=True)
     if failure:
-        assert p.returncode!=0 and 'published nocodestudio.version' in p.stderr and not p.stdout.strip()
+        assert p.returncode!=0 and 'nocodestudio.version or nocodestudio.archiveUrl' in p.stderr and not p.stdout.strip()
         return None
     assert p.returncode==0,'Candidate render failed'
     return [d for d in yaml.safe_load_all(p.stdout) if d]
@@ -60,12 +61,12 @@ for d in replay:
         for c in ps['containers']+ps.get('initContainers',[]):
             assert all(v['name'] in names for v in c.get('volumeMounts',[]))
 script=next(d['data']['installCarFiles.sh'] for d in replay if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
-assert 'NOCODESTUDIO_VERSION="2.2-rc"' in script
-assert yaml.safe_load((ROOT/'providers/outscale/values-replay-848.yaml').read_text())['nocodestudio']['version']=='2.2-rc'
+assert 'NOCODESTUDIO_VERSION="2.1.23"' in script
+assert yaml.safe_load((ROOT/'providers/outscale/values-replay-848.yaml').read_text())['nocodestudio']['version']=='2.1.23'
 assert '/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz' in script
-assert 'Select a published nocodestudio.version' in script
-assert '2.1.23' not in script
-print('PASS candidate 8.4.8, target RC/plugin/database versions, immutable CI rehearsal, generated credentials, RWX/Sentinel and volume references')
+assert 'Select an application version or archive URL' in script
+assert "NOCODESTUDIO_ARCHIVE_URL=''" in script
+print('PASS candidate 8.4.8, public default/plugin/database versions, immutable CI rehearsal, generated credentials, RWX/Sentinel and volume references')
 
 # Rendering a target is not proof of its public availability. Empty selection is still rejected,
 # and the beta is selected only by its separate rehearsal overlay.
@@ -74,4 +75,27 @@ fallback=render('-f',str(ROOT/'providers/outscale/values.yaml'),'-f',str(ROOT/'p
 fallback_script=next(d['data']['installCarFiles.sh'] for d in fallback if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
 assert 'NOCODESTUDIO_VERSION="2.2.0-beta349.1"' in fallback_script
 assert '2.2.0-beta349.1' not in script
-print('PASS target RC and explicit beta fallback, no silent downgrade; empty selection remains rejected')
+print('PASS public default and explicit beta fallback, no silent downgrade; empty selection remains rejected')
+
+# The override is a complete URL, independent of the public tag/path and kept literal by the shell.
+url="https://artifacts.example.invalid/builds/custom.tar.gz?literal=$fixture_literal&label='x'"
+custom=render('--set-string','nocodestudio.archiveUrl='+url,'--set-string','nocodestudio.version=')
+custom_script=next(d['data']['installCarFiles.sh'] for d in custom if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
+assignment=next(l for l in custom_script.splitlines() if l.startswith('NOCODESTUDIO_ARCHIVE_URL='))
+p=subprocess.run(['bash','-c',assignment+'\nprintf "%s" "$NOCODESTUDIO_ARCHIVE_URL"'],capture_output=True,text=True,check=True)
+assert p.stdout==url
+assert 'SOURCE_URL="$NOCODESTUDIO_ARCHIVE_URL"' in custom_script
+assert '--config "$STAGE/forms-download.conf"' in custom_script
+with tempfile.TemporaryDirectory(prefix='private-url-default-fixture-') as folder:
+    f=Path(folder)/'values.yaml';f.write_text('nocodestudio:\n  version: "2.2-rc"\n  archiveUrl: "https://artifacts.example.invalid/custom.tar.gz"\n')
+    p=subprocess.run(['python3',str(ROOT/'tests/application-release-assets.py'),'--values',str(f)],capture_output=True,text=True)
+    assert p.returncode==1 and json.loads(p.stdout)['status']=='custom-url-not-allowed-in-public-defaults'
+    assert 'example.invalid' not in p.stdout+p.stderr
+    fallback=render('-f',str(ROOT/'providers/outscale/values.yaml'),'-f',str(ROOT/'providers/outscale/values-replay-848.yaml'),
+                    '-f',str(f),'-f',str(ROOT/'providers/outscale/values-replay-848-fallback.yaml'))
+    fallback_script=next(d['data']['installCarFiles.sh'] for d in fallback if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
+    assert 'NOCODESTUDIO_VERSION="2.2.0-beta349.1"' in fallback_script
+    assert "NOCODESTUDIO_ARCHIVE_URL=''" in fallback_script
+    assert 'artifacts.example.invalid' not in fallback_script
+
+print('PASS literal full-URL override and no private-source URL accepted for public default publication')

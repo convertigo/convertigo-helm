@@ -1,6 +1,6 @@
 # Local 8.4.8 rehearsal overlay. Layer after providers/outscale/values.yaml.
 # Fresh, dedicated workspace/namespace only after approval; not an instruction to upgrade an instance.
-# RC rehearsal requires the public assets; an explicit beta fallback overlay is provided separately.
+# Public baseline. A private application build is selected only through an uncommitted URL override.
 # This immutable CI baseline was available on 2026-11-17. Select the approved CI build containing
 # the required engine fixes before qualification; see docs/replay-848.md. Do not use hotfix/latest.
 image:
@@ -22,8 +22,9 @@ crypto:
 
 nocodestudio:
   enable: true
-  # Charles must publish this exact public tag/assets. Use the fallback overlay explicitly if absent.
-  version: "2.2-rc"
+  version: "2.1.23"
+  # Never place an embargoed URL in this versioned example.
+  archiveUrl: ""
 awsMarketplace:
   enabled: false
 

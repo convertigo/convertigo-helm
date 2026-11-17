@@ -111,10 +111,15 @@ while True:
   if time.monotonic()>deadline:sys.exit(1)
   time.sleep(.02)
 ''')
-    tool('curl', '''import os,sys,pathlib,shutil,time
+    tool('curl', '''import os,sys,pathlib,shutil,time,json
 with open(os.environ['COUNT_FILE'],'a') as f:f.write('download\\n')
 if os.environ.get('FAIL_DOWNLOAD')=='1':sys.exit(22)
-assert any('c8oforms_standalone.tar.gz' in a for a in sys.argv)
+assert not any(a.startswith('https://') for a in sys.argv)
+config=pathlib.Path(sys.argv[sys.argv.index('--config')+1]); assert config.stat().st_mode & 0o777==0o600
+url=json.loads(config.read_text().split('=',1)[1].strip())
+expected=os.environ.get('EXPECTED_ARCHIVE_URL')
+if expected: assert url==expected
+else: assert url.startswith('https://github.com/convertigo/C8oForms/releases/download/') and url.endswith('/c8oforms_standalone.tar.gz')
 time.sleep(.15)
 shutil.copyfile(os.environ['ARCHIVE'],sys.argv[sys.argv.index('-o')+1])
 ''')
@@ -140,6 +145,7 @@ print(hashlib.sha512(sys.stdin.buffer.read()).hexdigest()+'  -')
     def run(e, fail=False):
         p = subprocess.run(['bash', str(script)], env=e, capture_output=True, text=True)
         assert (p.returncode != 0) if fail else (p.returncode == 0), 'Installer fixture returned unexpected status'
+        return p
     pending = root / 'pending-release'; pending.mkdir(); pending_count = root / 'pending-count'
     script.write_text(installer(default).replace('NOCODESTUDIO_VERSION="fixture-published-release"','NOCODESTUDIO_VERSION=""'))
     run(env(pending, pending_count),fail=True)
@@ -154,6 +160,14 @@ print(hashlib.sha512(sys.stdin.buffer.read()).hexdigest()+'  -')
     run(env(retained,pending_count))
     assert retained_properties.read_text()=='fixture=keep\n' and not pending_count.exists()
     assert not (retained/'projects/BaserowIntegration').exists()
+    custom_url="https://artifacts.example.invalid/build/bundle.tar.gz?literal=$fixture_literal&label='x'"
+    script.write_text(installer(render('--set-string','nocodestudio.archiveUrl='+custom_url,'--set-string','nocodestudio.version=')))
+    private_workspace=root/'private-download';private_workspace.mkdir();private_count=root/'private-count'
+    downloaded=run(env(private_workspace,private_count,EXPECTED_ARCHIVE_URL=custom_url))
+    assert custom_url not in downloaded.stdout+downloaded.stderr
+    assert private_count.read_text()=='download\n'
+    assert not list(private_workspace.glob('.chart-install.??????'))
+    script.write_text(installer(default))
     workspace = root / 'workspace'; workspace.mkdir(); count = root / 'count'
     run(env(workspace, count, FAIL_DOWNLOAD='1'), fail=True)
     assert not (workspace / '.chart-install-complete').exists()

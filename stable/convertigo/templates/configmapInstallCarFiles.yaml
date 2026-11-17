@@ -1,8 +1,12 @@
-{{- if and (not (empty .Values.nocodestudio.version)) (not (regexMatch "^[a-zA-Z0-9][a-zA-Z0-9._+-]*$" (toString .Values.nocodestudio.version))) -}}
-{{- fail "nocodestudio.version must be a public release tag" -}}
+{{- $archiveUrl := default "" .Values.nocodestudio.archiveUrl -}}
+{{- if and $archiveUrl (not (regexMatch "^https://[^[:space:]]+$" $archiveUrl)) -}}
+{{- fail "nocodestudio.archiveUrl must be a complete HTTPS URL without whitespace" -}}
 {{- end -}}
-{{- if and (not (include "convertigo.existingInstallation" .)) .Values.nocodestudio.enable (dig "enabled" true (.Values.projectInstallation | default dict)) (empty .Values.nocodestudio.version) -}}
-{{- fail "Select and verify a published nocodestudio.version before starting a new No Code installation" -}}
+{{- if and (not (empty .Values.nocodestudio.version)) (not (regexMatch "^[a-zA-Z0-9][a-zA-Z0-9._+-]*$" (toString .Values.nocodestudio.version))) -}}
+{{- fail "nocodestudio.version must be a valid release identifier" -}}
+{{- end -}}
+{{- if and (not (include "convertigo.existingInstallation" .)) .Values.nocodestudio.enable (dig "enabled" true (.Values.projectInstallation | default dict)) (empty .Values.nocodestudio.version) (empty $archiveUrl) -}}
+{{- fail "Select nocodestudio.version or nocodestudio.archiveUrl before starting a new No Code installation" -}}
 {{- end -}}
 apiVersion: v1
 kind: ConfigMap
@@ -22,6 +26,8 @@ data:
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
     NOCODESTUDIO_ENABLED="{{ if .Values.nocodestudio.enable }}true{{ else }}false{{ end }}"
     NOCODESTUDIO_VERSION={{ default "" .Values.nocodestudio.version | quote }}
+    # Shell-quote the literal URL; it is neither exported nor passed as a curl argument.
+    NOCODESTUDIO_ARCHIVE_URL={{ $archiveUrl | replace "'" "'\"'\"'" | squote }}
     INSTALL_ENABLED="{{ dig "enabled" true (.Values.projectInstallation | default dict) }}"
     METERING_ENABLED="{{ dig "enabled" false (.Values.awsMarketplace | default dict) }}"
     command -v flock >/dev/null || { echo "Workspace setup requires flock" >&2; exit 1; }
@@ -39,11 +45,11 @@ data:
     if [[ -f "$WORKSPACE/.chart-install-complete" ]] || { [[ ! -f "$CONFIG_DIR/.chart-crypto-state" ]] && { [[ -n "$(ls -A "$CONFIG_DIR" 2>/dev/null)" ]] || [[ -n "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]]; }; }; then
       PRESERVE_CREDENTIALS=true
     fi
-    # A new No Code workspace needs an explicitly selected published release. Existing projects
-    # remain untouched when no new version is selected; never request an empty or guessed tag.
+    # A new No Code workspace needs a selected release or an explicit archive source. Existing
+    # projects remain untouched; never request an empty or guessed public tag.
     if [[ "$INSTALL_ENABLED" == true && "$NOCODESTUDIO_ENABLED" == true ]]; then
-      if [[ -z "$NOCODESTUDIO_VERSION" && "$PRESERVE_CREDENTIALS" != true ]]; then
-        echo "Select a published nocodestudio.version before initializing a new No Code workspace" >&2
+      if [[ -z "$NOCODESTUDIO_VERSION" && -z "$NOCODESTUDIO_ARCHIVE_URL" && "$PRESERVE_CREDENTIALS" != true ]]; then
+        echo "Select an application version or archive URL before initializing a new No Code workspace" >&2
         exit 1
       fi
       if [[ -n "$NOCODESTUDIO_VERSION" && ! "$NOCODESTUDIO_VERSION" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ ]]; then
@@ -55,7 +61,7 @@ data:
     STAGE=$(mktemp -d "$WORKSPACE/.chart-install.XXXXXX")
     trap 'rm -rf -- "$STAGE"' EXIT
     MARKER="$WORKSPACE/.chart-install-complete"
-    SIGNATURE="v2:nocode=$NOCODESTUDIO_ENABLED:$NOCODESTUDIO_VERSION:install=$INSTALL_ENABLED:metering=$METERING_ENABLED"
+    SIGNATURE="v2:nocode=$NOCODESTUDIO_ENABLED:$NOCODESTUDIO_VERSION{{ if $archiveUrl }}:source={{ $archiveUrl | sha256sum }}{{ end }}:install=$INSTALL_ENABLED:metering=$METERING_ENABLED"
     # Existing projects remain intact. Only complete, staged project directories are published.
     publish_projects() {
       local project
@@ -136,8 +142,20 @@ data:
     if [[ "$INSTALL_ENABLED" == true && "$(cat "$MARKER" 2>/dev/null || true)" != "$SIGNATURE" ]]; then
       mkdir -p "$STAGE/projects"
       # A chart update does not authorize importing a new application into a retained workspace.
-      if [[ "$NOCODESTUDIO_ENABLED" == true && -n "$NOCODESTUDIO_VERSION" && "$PRESERVE_CREDENTIALS" != true ]]; then
-        curl --fail --location --retry 3 "https://github.com/convertigo/C8oForms/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz" -o "$STAGE/forms.tar.gz"
+      if [[ "$NOCODESTUDIO_ENABLED" == true && "$PRESERVE_CREDENTIALS" != true ]]; then
+        SOURCE_URL="$NOCODESTUDIO_ARCHIVE_URL"
+        if [[ -z "$SOURCE_URL" ]]; then
+          SOURCE_URL="https://github.com/convertigo/C8oForms/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz"
+        fi
+        # A signed private URL must not appear in process arguments or container logs.
+        CURL_URL=${SOURCE_URL//\\/\\\\}
+        CURL_URL=${CURL_URL//\"/\\\"}
+        printf 'url = "%s"\n' "$CURL_URL" > "$STAGE/forms-download.conf"
+        curl --fail --location --retry 3 --config "$STAGE/forms-download.conf" -o "$STAGE/forms.tar.gz" > "$STAGE/forms-download.log" 2>&1 || {
+          echo "Application archive download failed; review its private source configuration" >&2
+          exit 1
+        }
+        unset SOURCE_URL CURL_URL
         tar xzf "$STAGE/forms.tar.gz" --no-same-owner --strip-components=4 -C "$STAGE/projects" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
         publish_projects
       fi

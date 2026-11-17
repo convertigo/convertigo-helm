@@ -5,10 +5,10 @@ are separate actions requiring the environment owner's approval. No action below
 
 ## Versions and existing data
 
-The application target is the public prerelease tag `2.2-rc`, pending publication of its assets.
-`nocodestudio.version` remains parametric and will move to the final public release when approved.
-The explicit rehearsal-only fallback is `2.2.0-beta349.1`, selected by a separate values overlay,
-not silently on download failure. See [the release contract](application-release-contract.md).
+The public default remains C8oForms 2.1.23. A private RC is selected only via an uncommitted
+`nocodestudio.archiveUrl` override to a complete compatible tar; it need not be published publicly.
+The historical rehearsal-only beta349.1 fallback remains a separate explicit overlay, not an
+automatic downgrade. See [the source contract](application-release-contract.md).
 
 Baserow 1.34.5 and plugin 0.3.1 remain the existing baseline, not a compatibility claim for the next
 application release. Their known plugin matrix does not prove that a newer C8oForms application can

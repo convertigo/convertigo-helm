@@ -22,6 +22,8 @@ if args.values:
         if line=='nocodestudio:':section=True;continue
         if section and line and not line[0].isspace() and not line.startswith('#'):break
         if not section:continue
+        if re.match(r'\s+archiveUrl:',line) and not re.fullmatch(r"\s+archiveUrl:\s*(?:\"\"|'')\s*(?:#.*)?",line):
+            print(json.dumps({'status':'custom-url-not-allowed-in-public-defaults'}));raise SystemExit(1)
         if re.fullmatch(r'\s+enable:\s*false\s*(?:#.*)?',line):enabled=False
         if re.match(r'\s+version:',line):
             value=re.fullmatch(r"\s+version:\s*['\"]([A-Za-z0-9][A-Za-z0-9._+-]*)['\"]\s*(?:#.*)?",line)

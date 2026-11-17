@@ -66,7 +66,8 @@ Find below the values.yaml customization options :
 | redis.podAnnotations, podSecurityContext, securityContext, nodeSelector, tolerations, affinity | | Pod settings of the Redis pods. |
 | redis.extraVolumes, extraVolumeMounts, extraContainers, extraInitContainers | [] | Additional volumes and containers of the Redis pods, for example a Vault agent. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
-| nocodestudio.version              | 2.2-rc                 | Target public prerelease tag; its assets must exist before installing a new workspace. |
+| nocodestudio.version              | 2.1.23                 | Public GitHub release tag used when archiveUrl is empty. |
+| nocodestudio.archiveUrl           | empty                  | Optional complete HTTPS standalone tar URL; private test values must never be committed. |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
 | publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
 | publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
@@ -806,11 +807,9 @@ of a previously installed AwsMetering project and preservation of existing datab
 Changing nocodestudio.version selects the archive for a new workspace; it does not replace an
 existing C8oForms project or its local adaptations automatically.
 
-The candidate targets the public prerelease tag `2.2-rc`. Its assets must be published before a new
-No Code installation; successful rendering does not verify remote availability. The selected tag
-is parametric and will be replaced by the final public release when approved. Existing workspaces
-are not reimported by a chart upgrade, even if the default application tag changes. For a new
-rehearsal only, `providers/outscale/values-replay-848-fallback.yaml` explicitly selects the published
-`2.2.0-beta349.1`; there is no automatic fallback or downgrade. See
-[the publication contract](../../docs/application-release-contract.md). Backend/plugin compatibility
-for the RC remains subject to application-owner confirmation.
+The current public default is C8oForms 2.1.23 from GitHub. `nocodestudio.archiveUrl` (default empty)
+can override the complete standalone-bundle URL for a private test build; it does not change the
+required tar layout. Keep private sources only in uncommitted overrides outside the repository.
+Any URL in public chart defaults/examples becomes public. Helm release data and rendered ConfigMaps
+also contain an override, so restrict their access and do not share rendered manifests.
+See [the source contract](../../docs/application-release-contract.md).

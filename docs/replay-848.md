@@ -6,9 +6,9 @@ context or another environment. Namespace, route, hostname and Secret identities
 
 ## Candidate and values
 
-Package the local branch into an external evidence directory; do not publish it. RC rendering is
-available before the assets are uploaded, but that is not proof it can be installed. First check
-public availability with the preflight below; then apply the approved backend/build/route overrides.
+Package the local branch into an external evidence directory; do not publish it. The public baseline uses
+2.1.23 from GitHub. A private RC needs an uncommitted archiveUrl override and the owner's approved
+backend/build/route settings, not a public RC publication.
 The example private values path must be replaced by the owner:
 
 ```sh
@@ -40,27 +40,30 @@ RWX workspace, persistent 3-member Sentinel, and routing through an existing Env
 rehearsal overlay clears the base profile's external Secret refs to exercise generated first-install
 passwords; the engine default phrase remains unchanged. Do not layer it onto retained production data.
 
-## RC and explicit beta fallback
+## Private RC source and explicit beta fallback
 
-The default/profile target is `nocodestudio.version: "2.2-rc"`. Charles must publish that exact tag
-in the public repository, with the expected assets. If another spelling is chosen, update the
-value to the exact published tag. The final release will replace the RC later, on approval.
+The default/profile use `nocodestudio.version: "2.1.23"` with `archiveUrl: ""`, preserving GitHub.
+For private RC tests, the owner creates a local values file **outside this public checkout** with
+restrictive permissions. It supplies the real RC identifier, a complete approved HTTPS standalone
+bundle URL and any approved backend changes. No private URL is provided in a versioned example.
+Do not put a signed URL in --set or a command line; rendered manifests/release ConfigMaps also
+need private handling. See [the exact source contract](application-release-contract.md).
 
-Run the public metadata/HEAD preflight explicitly (it does not install or download full assets):
+The override does not append the version or filename and does not require a public GitHub RC.
+It still expects the standalone tar layout, not a CAR/ZIP. Request the matching private bundle and
+checksum from its owner and confirm access/expiry; this feature does not create a bucket or IAM.
+
+The public metadata checker applies only to the public default, not to a private artifact:
 
 ```sh
-python3 tests/application-release-assets.py --version 2.2-rc
+python3 tests/application-release-assets.py --values stable/convertigo/values.yaml
 ```
 
-A missing RC is an installation blocker, not a reason for silent fallback. If the owner selects
-the authorized fresh-workspace fallback, check `--version 2.2.0-beta349.1` and layer
-`providers/outscale/values-replay-848-fallback.yaml` **last**, after both profiles and the private
-route/build/backend override. It selects only the application version. Keep backend
-versions at the approved combination. Do not apply the beta overlay to downgrade an RC workspace.
-
-The current initializer consumes the standalone tar bundle, not the CAR/ZIP. See
-[the exact publication contract](application-release-contract.md). A fallback test qualifies that
-beta only; repeat application qualification against the published RC before accepting it.
+The previously authorized fresh-rehearsal fallback remains `2.2.0-beta349.1` through the explicit
+`values-replay-848-fallback.yaml` overlay. Ensure a private archiveUrl override is cleared when
+choosing it, since a complete URL has priority over version selection. Never downgrade an existing
+RC workspace. No error triggers a silent source/version fallback. A test of the beta or public stable
+qualifies only that build, not the private RC.
 
 ## Fresh-workspace rehearsal, after approval
 
@@ -105,7 +108,7 @@ prune, or delete storage to hide a failed rehearsal.
 ## Publication checkpoint
 
 No push, tag or release is implied by version 8.4.8 in Chart.yaml. The local release-image test
-checks rendering only, not public application availability. Publish only after the public-asset
-preflight passes, the selected version is accepted and the owner agrees,
+checks rendering only, not public application availability. Publish only after the public-default
+preflight passes with no private URL in defaults, the selected version is accepted and the owner agrees,
 engine/application checks are accepted, the official `convertigo:8.4.8` exists and the release-image
 check passes. Provider images/scans and the separate release checklist remain prerequisites.

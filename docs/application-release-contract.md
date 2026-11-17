@@ -1,80 +1,60 @@
-# Application release contract for the chart candidate
+# Application archive source contract
 
-The candidate selects `nocodestudio.version: "2.2-rc"` as the target public prerelease. The publisher
-must create this exact public tag (or agree another exact spelling and update the value), with a
-release marked as a prerelease and assets from the selected RC build. Do not just relabel an older
-beta. The final public release will replace this value when ready and approved.
+The public default is C8oForms `2.1.23`, downloaded from its public GitHub release. A private test
+build does not need a public prerelease: select it only through an uncommitted values override.
+The chart never publishes an artifact or creates a bucket.
 
-The separate fresh-rehearsal fallback is `2.2.0-beta349.1` through
-`providers/outscale/values-replay-848-fallback.yaml`. No installer automatically switches to it on
-HTTP errors, and it must not downgrade an existing RC workspace. A chart upgrade keeps existing
-application projects and identities rather than reimporting the new default tag.
+## Default and explicit source
 
-## What the current installer actually consumes
-
-The current URL is:
+`nocodestudio.archiveUrl` defaults to an empty string. When empty, the unchanged source is:
 
 ```
-https://github.com/convertigo/C8oForms/releases/download/<exact-tag>/c8oforms_standalone.tar.gz
+https://github.com/convertigo/C8oForms/releases/download/<nocodestudio.version>/c8oforms_standalone.tar.gz
 ```
 
-The installer extracts only `c8oforms_standalone/data/workspace/projects/*`, stripping four prefix
-components into staging. That bundle must contain C8Oforms and all runtime libraries/integration
-projects required for a clean workspace. Workspace configuration, credentials and existing project
-adaptations are not imported from the archive. The installer publishes only missing project folders.
+A nonempty `nocodestudio.archiveUrl` selects that complete HTTPS URL as-is, without appending the
+version, a filename or a GitHub prefix. Set `nocodestudio.version` to the artifact's real identifier
+for provenance; a full URL can also be used without a version. No download failure selects another
+source automatically. An existing workspace is not reimported by changing these settings during a
+routine chart upgrade.
 
-A `C8Oforms.car` release asset by itself is **not** accepted by this tar-based installation path.
-It must not be renamed to the tar asset or passed to tar extraction. If the publisher chooses
-CARs only, agree and test a different import/dependency-resolution path before changing the chart.
-A CAR may be suitable for an engine import with its dependencies; that is a different contract
-from the current pre-engine workspace bootstrap.
+## Required archive contents
 
-## Public prerelease assets to publish
+The current installer extracts a **standalone tar bundle**, not `C8Oforms.car` or a dependency ZIP.
+The bundle must contain all required runtime projects/libraries under:
 
-Under `https://github.com/convertigo/C8oForms/releases/tag/2.2-rc`, publish these exact names from
-the same RC build, matching the public packaging convention:
+```
+c8oforms_standalone/data/workspace/projects/<project>/...
+```
 
-| Asset | Chart use / required content |
-| --- | --- |
-| `c8oforms_standalone.tar.gz` | Required by the current chart. Keep the root/layout above and include all runtime projects/libraries for a fresh workspace. |
-| `C8Oforms.car` | Project import delivery; not the current pre-engine tar bootstrap. |
-| `no_code_studio_and_dependencies.zip` | Complete project/dependency delivery for the corresponding release; not read by the current bootstrap. |
+Four prefix components are stripped into staging. Configuration, accounts and credentials from an
+archive are not imported. A full-URL override changes the source, not the format: a CAR alone cannot
+be substituted for this tar, even if the URL/filename ends in .tar.gz. Agree an installer adaptation
+before choosing a different format.
 
-Attach sizes and SHA-256 values plus a build/commit and dependency manifest. The tar is the
-minimum needed by this chart; the other two preserve the expected release delivery set. A release
-containing only the CAR or ZIP cannot satisfy the chart's current download/extraction path.
-`tests/application-release-assets.py --version <tag>` checks public metadata and HEAD availability
-of all three; the publication workflow reads the selected tag via `--values` and fails if the
-public assets are missing. This does not prove contents or runtime compatibility. Recheck bundle layout/hash
-and qualify the application before rollout. Public metadata is read without credentials.
+For a private RC, request the matching standalone bundle, checksum, build/commit and runtime
+manifest from its owner; it does not need to be placed in the public GitHub release. Confirm minimum
+engine, Baserow backend/frontend, plugin/API, account/symbol/route contracts and any migration plan
+for that precise version. The existing backend/plugin matrix is not RC runtime qualification.
 
-## Information required from the publisher
+## Public-default disclosure boundary
 
-- Exact public tag and release status, target application version and minimum Convertigo core/format.
-  The chart targets engine 8.4.8; do not assume that another application's RC or next branch has the
-  same engine requirement. The private source is not the public download endpoint.
-- Exact case-sensitive asset names, archive type, size and SHA-256. Will the standalone tar bundle
-  above remain, or will only CARs/another dependency bundle be published?
-- For a tar bundle: confirm its root/layout and project names. Supply a manifest of required runtime
-  dependencies, their versions/hashes and whether they are bundled or fetched by references.
-  Any runtime fetch must work through the agreed public/artifact access path without embedding
-  private repository credentials in the chart.
-- Exact supported Baserow backend/frontend versions and database prerequisites. Is the existing
-  1.34.5 baseline valid, or does the new application require a 2.x line? Is a database migration
-  needed, and what is its supported rollback/restore path?
-- Exact required c8oforms plugin version and features/API contracts. Plugin 0.3.1's existing matrix
-  (Baserow 1.34.5 and 2.4.1) is not evidence for a newer application/backend combination.
-- Initial technical-administrator and normal-user provisioning with closed public signup: required
-  roles/endpoints, symbols, project/library names, public URLs/paths and startup order. Confirm the
-  symbols the chart writes still match the new application's libraries and account flow.
-- New-installation and existing-project upgrade procedure, including reference auto-update policy
-  and preservation of local adaptations/data. A new chart tag does not force-reimport old projects.
+**Any URL committed to the defaults of a public chart becomes public.** The same is true for
+versioned provider examples, documentation, commits, rendered files and chart archives. Never put a
+private or embargoed source there, even temporarily. Use a private values file outside the checkout,
+with restricted permissions, and do not supply a signed URL through --set, shell history or process
+arguments. The public example files keep archiveUrl empty. The publication preflight rejects a
+nonempty archiveUrl in chart defaults without printing it; this is not a substitute for review
+before any public commit or push.
 
-## Selection and acceptance
+A private values override is still stored in Helm release data and rendered into a namespace
+ConfigMap. Treat access to those objects and to rendered manifests as private; this is not a secret
+vault. The init uses a temporary private curl config rather than putting the URL into curl arguments,
+and captures download output privately instead of emitting it into container logs.
 
-After publication, verify the exact public assets and their hashes/layout before setting the tag.
-Keep any required packaging/installer change separate and reviewable. Select backend/plugin versions
-only after owner confirmation, then rerun local rendering/upgrade tests and the authorized isolated
-rehearsal: 3-replica RWX startup, project loading, account creation, a synthetic form/data source,
-plugin behavior and authenticated session failover. Never infer this from an RC already running
-elsewhere; no existing instance is accessed by preparing this contract.
+A bucket/object URL being undisclosed is not access control. Its owner must supply the approved
+access mechanism (for example a time-limited signed download) and account for retries after expiry.
+No bucket, IAM policy, token acquisition or cloud credential is configured by this feature.
+
+The public metadata/HEAD checker is for public releases/defaults only. Do not send a private source
+to it. Verify private-artifact checksum/access out of band and keep all evidence private.

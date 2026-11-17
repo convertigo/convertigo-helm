@@ -15,7 +15,7 @@ CHART=ROOT/'stable/convertigo'
 metadata=yaml.safe_load((CHART/'Chart.yaml').read_text())
 values=yaml.safe_load((CHART/'values.yaml').read_text())
 assert metadata['version']==metadata['appVersion']=='8.4.8'
-assert values['nocodestudio']['version']==''
+assert values['nocodestudio']['version']=='2.2-rc'
 assert values['baserow']['image']['tag']=='1.34.5'
 assert values['timescaledb']['image']['tag']=='2.32.0-pg16'
 assert not values['awsMarketplace']['enabled']
@@ -34,13 +34,12 @@ def render(*args, failure=False):
 
 def deployments(ds):return {d['metadata']['name']:d for d in ds if d['kind']=='Deployment'}
 def main(d):return d['spec']['template']['spec']['containers'][0]
-render(failure=True)
+render('--set-string','nocodestudio.version=',failure=True)
 render('--set','nocodestudio.enable=false')
-base=render('--set-string','nocodestudio.version=fixture-published-release');before=deployments(base)
+base=render();before=deployments(base)
 assert main(before['rehearsal-convertigo-convertigo'])['image']=='convertigo:8.4.8'
 assert main(before['rehearsal-convertigo-timescale'])['image']=='timescale/timescaledb:2.32.0-pg16'
-render('-f',str(ROOT/'providers/outscale/values.yaml'),'-f',str(ROOT/'providers/outscale/values-replay-848.yaml'),failure=True)
-replay=render('-f',str(ROOT/'providers/outscale/values.yaml'),'-f',str(ROOT/'providers/outscale/values-replay-848.yaml'),'--set-string','nocodestudio.version=fixture-published-release')
+replay=render('-f',str(ROOT/'providers/outscale/values.yaml'),'-f',str(ROOT/'providers/outscale/values-replay-848.yaml'))
 ds=deployments(replay);engine=ds['rehearsal-convertigo-convertigo'];pod=engine['spec']['template']['spec']
 assert engine['spec']['replicas']==3
 image=main(engine)['image']
@@ -61,23 +60,18 @@ for d in replay:
         for c in ps['containers']+ps.get('initContainers',[]):
             assert all(v['name'] in names for v in c.get('volumeMounts',[]))
 script=next(d['data']['installCarFiles.sh'] for d in replay if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
-assert 'NOCODESTUDIO_VERSION="fixture-published-release"' in script
-assert yaml.safe_load((ROOT/'providers/outscale/values-replay-848.yaml').read_text())['nocodestudio']['version']==''
+assert 'NOCODESTUDIO_VERSION="2.2-rc"' in script
+assert yaml.safe_load((ROOT/'providers/outscale/values-replay-848.yaml').read_text())['nocodestudio']['version']=='2.2-rc'
 assert '/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz' in script
 assert 'Select a published nocodestudio.version' in script
 assert '2.1.23' not in script
-print('PASS candidate 8.4.8, pending application selection/plugin/database versions, immutable CI rehearsal, generated credentials, RWX/Sentinel and volume references')
+print('PASS candidate 8.4.8, target RC/plugin/database versions, immutable CI rehearsal, generated credentials, RWX/Sentinel and volume references')
 
-# The deliberately unselected candidate cannot pass the publication guard. A supplied fixture tag
-# exercises the local positive path without claiming any public application release exists.
-pending=subprocess.run(['bash',str(ROOT/'tests/release-image.sh')],env=dict(os.environ,KUBECONFIG='/dev/null'),capture_output=True,text=True)
-assert pending.returncode!=0 and 'published nocodestudio.version' in pending.stderr
-with tempfile.TemporaryDirectory(prefix='release-application-fixture-') as folder:
-    root=Path(folder); (root/'stable').mkdir(); (root/'tests').mkdir()
-    shutil.copytree(CHART,root/'stable/convertigo')
-    shutil.copyfile(ROOT/'tests/release-image.sh',root/'tests/release-image.sh')
-    fixture=root/'stable/convertigo/values.yaml'
-    fixture.write_text(fixture.read_text().replace('    version: ""','    version: "fixture-published-release"',1))
-    accepted=subprocess.run(['bash',str(root/'tests/release-image.sh')],env=dict(os.environ,KUBECONFIG='/dev/null'),capture_output=True,text=True)
-    assert accepted.returncode==0,'Publication guard rejected an explicit fixture tag'
-print('PASS publication guard refuses an unselected application release; explicit fixture path works')
+# Rendering a target is not proof of its public availability. Empty selection is still rejected,
+# and the beta is selected only by its separate rehearsal overlay.
+fallback=render('-f',str(ROOT/'providers/outscale/values.yaml'),'-f',str(ROOT/'providers/outscale/values-replay-848.yaml'),
+                '-f',str(ROOT/'providers/outscale/values-replay-848-fallback.yaml'))
+fallback_script=next(d['data']['installCarFiles.sh'] for d in fallback if d['kind']=='ConfigMap' and 'installCarFiles.sh' in d.get('data',{}))
+assert 'NOCODESTUDIO_VERSION="2.2.0-beta349.1"' in fallback_script
+assert '2.2.0-beta349.1' not in script
+print('PASS target RC and explicit beta fallback, no silent downgrade; empty selection remains rejected')

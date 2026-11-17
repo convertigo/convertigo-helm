@@ -6,11 +6,10 @@ context or another environment. Namespace, route, hostname and Secret identities
 
 ## Candidate and values
 
-Package the local branch into an external evidence directory; do not publish it. Raw default
-render/lint is intentionally rejected until an application release is selected. For local contract
-tests use `tests/candidate-848.py` with synthetic fixture tags. Only after publication and owner
-confirmation, prepare a private values file with the exact tag and approved backend versions, then
-use it for the following preview (replace the example path):
+Package the local branch into an external evidence directory; do not publish it. RC rendering is
+available before the assets are uploaded, but that is not proof it can be installed. First check
+public availability with the preflight below; then apply the approved backend/build/route overrides.
+The example private values path must be replaced by the owner:
 
 ```sh
 umask 077
@@ -41,16 +40,27 @@ RWX workspace, persistent 3-member Sentinel, and routing through an existing Env
 rehearsal overlay clears the base profile's external Secret refs to exercise generated first-install
 passwords; the engine default phrase remains unchanged. Do not layer it onto retained production data.
 
-## Application selection is pending
+## RC and explicit beta fallback
 
-`nocodestudio.version` is intentionally empty in defaults and in the overlay. This candidate must
-not bootstrap a new No Code workspace or be published before an exact public release is selected.
-An existing workspace remains untouched when no new application release is selected. No RC tag
-is guessed. The known Baserow/plugin versions are only a baseline until the application owner
-confirms the new release's requirements. See [the publisher contract](application-release-contract.md).
+The default/profile target is `nocodestudio.version: "2.2-rc"`. Charles must publish that exact tag
+in the public repository, with the expected assets. If another spelling is chosen, update the
+value to the exact published tag. The final release will replace the RC later, on approval.
 
-The current initializer consumes `c8oforms_standalone.tar.gz`, not a single CAR. Confirm the actual
-asset set/layout before choosing the tag; a CAR-only release requires an installer adaptation first.
+Run the public metadata/HEAD preflight explicitly (it does not install or download full assets):
+
+```sh
+python3 tests/application-release-assets.py --version 2.2-rc
+```
+
+A missing RC is an installation blocker, not a reason for silent fallback. If the owner selects
+the authorized fresh-workspace fallback, check `--version 2.2.0-beta349.1` and layer
+`providers/outscale/values-replay-848-fallback.yaml` **last**, after both profiles and the private
+route/build/backend override. It selects only the application version. Keep backend
+versions at the approved combination. Do not apply the beta overlay to downgrade an RC workspace.
+
+The current initializer consumes the standalone tar bundle, not the CAR/ZIP. See
+[the exact publication contract](application-release-contract.md). A fallback test qualifies that
+beta only; repeat application qualification against the published RC before accepting it.
 
 ## Fresh-workspace rehearsal, after approval
 
@@ -94,7 +104,8 @@ prune, or delete storage to hide a failed rehearsal.
 
 ## Publication checkpoint
 
-No push, tag or release is implied by version 8.4.8 in Chart.yaml. The current unselected application
-release intentionally fails the publication guard. Publish only after selecting a public tag, the owner agrees,
+No push, tag or release is implied by version 8.4.8 in Chart.yaml. The local release-image test
+checks rendering only, not public application availability. Publish only after the public-asset
+preflight passes, the selected version is accepted and the owner agrees,
 engine/application checks are accepted, the official `convertigo:8.4.8` exists and the release-image
 check passes. Provider images/scans and the separate release checklist remain prerequisites.

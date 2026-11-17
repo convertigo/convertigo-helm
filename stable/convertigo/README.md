@@ -66,7 +66,7 @@ Find below the values.yaml customization options :
 | redis.podAnnotations, podSecurityContext, securityContext, nodeSelector, tolerations, affinity | | Pod settings of the Redis pods. |
 | redis.extraVolumes, extraVolumeMounts, extraContainers, extraInitContainers | [] | Additional volumes and containers of the Redis pods, for example a Vault agent. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
-| nocodestudio.version              | unset                  | Exact public release tag; required for a new No Code workspace after the pending release is published. |
+| nocodestudio.version              | 2.2-rc                 | Target public prerelease tag; its assets must exist before installing a new workspace. |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
 | publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
 | publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
@@ -806,10 +806,11 @@ of a previously installed AwsMetering project and preservation of existing datab
 Changing nocodestudio.version selects the archive for a new workspace; it does not replace an
 existing C8oForms project or its local adaptations automatically.
 
-The next application release is pending: no C8oForms stable or RC is selected by this candidate.
-For a new No Code workspace, provide `nocodestudio.version` after its public publication and backend
-confirmation. Empty selection rejects a new No Code manifest before chart resources are
-applied, but an existing workspace is preserved without fetching an unknown release. Local renders/lint use an explicit synthetic tag for contract tests; the raw incomplete defaults
-and the publication guard refuse a new No Code installation.
-See [the publisher contract](../../docs/application-release-contract.md). The existing backend/plugin
-baseline is not an approval of the pending application's compatibility.
+The candidate targets the public prerelease tag `2.2-rc`. Its assets must be published before a new
+No Code installation; successful rendering does not verify remote availability. The selected tag
+is parametric and will be replaced by the final public release when approved. Existing workspaces
+are not reimported by a chart upgrade, even if the default application tag changes. For a new
+rehearsal only, `providers/outscale/values-replay-848-fallback.yaml` explicitly selects the published
+`2.2.0-beta349.1`; there is no automatic fallback or downgrade. See
+[the publication contract](../../docs/application-release-contract.md). Backend/plugin compatibility
+for the RC remains subject to application-owner confirmation.

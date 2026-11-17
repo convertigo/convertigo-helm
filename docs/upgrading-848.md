@@ -5,10 +5,10 @@ are separate actions requiring the environment owner's approval. No action below
 
 ## Versions and existing data
 
-The application release is deliberately unselected while the next public release is pending.
-Set `nocodestudio.version` to its exact published public tag only after the application owner confirms
-its assets and backend requirements. Do not use the retired stable release or invent a private RC
-as a public download tag. See [the application release contract](application-release-contract.md).
+The application target is the public prerelease tag `2.2-rc`, pending publication of its assets.
+`nocodestudio.version` remains parametric and will move to the final public release when approved.
+The explicit rehearsal-only fallback is `2.2.0-beta349.1`, selected by a separate values overlay,
+not silently on download failure. See [the release contract](application-release-contract.md).
 
 Baserow 1.34.5 and plugin 0.3.1 remain the existing baseline, not a compatibility claim for the next
 application release. Their known plugin matrix does not prove that a newer C8oForms application can
@@ -29,7 +29,8 @@ image. An offline preview cannot see the existing image; use a server dry-run ag
 namespace for a representative preview. Never infer the installed extension version from an image
 tag, run ALTER EXTENSION automatically, or switch a retained PostgreSQL data directory across majors.
 
-The project installer publishes only missing directories. Bumping `nocodestudio.version` selects
+The project installer publishes only missing directories during new-workspace initialization;
+a routine chart upgrade does not import a new application into a retained workspace. Bumping `nocodestudio.version` selects
 an archive for a new workspace; it does not replace an existing C8oForms project or local adaptations.
 Review any application upgrade separately. Existing Secrets, passwords, symbols and effective crypto
 phrase stay unchanged. Fresh passwords are generated/provided; a custom phrase stays explicit opt-in.

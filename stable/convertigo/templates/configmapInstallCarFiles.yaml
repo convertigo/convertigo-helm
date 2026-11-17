@@ -135,7 +135,8 @@ data:
 
     if [[ "$INSTALL_ENABLED" == true && "$(cat "$MARKER" 2>/dev/null || true)" != "$SIGNATURE" ]]; then
       mkdir -p "$STAGE/projects"
-      if [[ "$NOCODESTUDIO_ENABLED" == true && -n "$NOCODESTUDIO_VERSION" ]]; then
+      # A chart update does not authorize importing a new application into a retained workspace.
+      if [[ "$NOCODESTUDIO_ENABLED" == true && -n "$NOCODESTUDIO_VERSION" && "$PRESERVE_CREDENTIALS" != true ]]; then
         curl --fail --location --retry 3 "https://github.com/convertigo/C8oForms/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz" -o "$STAGE/forms.tar.gz"
         tar xzf "$STAGE/forms.tar.gz" --no-same-owner --strip-components=4 -C "$STAGE/projects" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
         publish_projects

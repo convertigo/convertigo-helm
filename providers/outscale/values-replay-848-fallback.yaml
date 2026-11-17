@@ -1,0 +1,5 @@
+# Rehearsal-only explicit fallback authorized while the target RC is not public.
+# Layer after values.yaml and values-replay-848.yaml. Never switch automatically or downgrade
+# an existing RC workspace to this beta; use a fresh, separately approved rehearsal workspace.
+nocodestudio:
+  version: "2.2.0-beta349.1"

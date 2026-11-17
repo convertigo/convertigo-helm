@@ -25,9 +25,9 @@ image:
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
     enable: true
-    # Select the exact public release tag after publication and application-owner confirmation.
-    # No RC or retired stable is selected while the next release is pending.
-    version: ""
+    # Target public prerelease tag. Its assets must be published before installation.
+    # Replace with the final release tag when approved; no automatic fallback on download failure.
+    version: "2.2-rc"
 
 # The generated credential is kept across upgrades. Prefer an existing Secret in production.
 admin:

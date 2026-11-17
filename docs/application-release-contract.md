@@ -1,13 +1,14 @@
 # Application release contract for the chart candidate
 
-The application owner must confirm the next public release and its dependencies before the chart
-selects it. `nocodestudio.version` is intentionally empty in this candidate and the rehearsal overlay.
-No retired stable or unpublished RC is substituted. Parameterization remains available; a new No
-Code workspace needs an explicit published tag, while existing workspaces are kept without a new
-fetch when the version is empty. Disabling No Code installation does not require an application tag.
-The Helm render rejects an enabled but unselected new No Code installation before chart resources
-are applied; its default lint/publication guard also fails until selection. Synthetic tags are used
-only by local unit fixtures, never as a published default.
+The candidate selects `nocodestudio.version: "2.2-rc"` as the target public prerelease. The publisher
+must create this exact public tag (or agree another exact spelling and update the value), with a
+release marked as a prerelease and assets from the selected RC build. Do not just relabel an older
+beta. The final public release will replace this value when ready and approved.
+
+The separate fresh-rehearsal fallback is `2.2.0-beta349.1` through
+`providers/outscale/values-replay-848-fallback.yaml`. No installer automatically switches to it on
+HTTP errors, and it must not downgrade an existing RC workspace. A chart upgrade keeps existing
+application projects and identities rather than reimporting the new default tag.
 
 ## What the current installer actually consumes
 
@@ -27,6 +28,25 @@ It must not be renamed to the tar asset or passed to tar extraction. If the publ
 CARs only, agree and test a different import/dependency-resolution path before changing the chart.
 A CAR may be suitable for an engine import with its dependencies; that is a different contract
 from the current pre-engine workspace bootstrap.
+
+## Public prerelease assets to publish
+
+Under `https://github.com/convertigo/C8oForms/releases/tag/2.2-rc`, publish these exact names from
+the same RC build, matching the public packaging convention:
+
+| Asset | Chart use / required content |
+| --- | --- |
+| `c8oforms_standalone.tar.gz` | Required by the current chart. Keep the root/layout above and include all runtime projects/libraries for a fresh workspace. |
+| `C8Oforms.car` | Project import delivery; not the current pre-engine tar bootstrap. |
+| `no_code_studio_and_dependencies.zip` | Complete project/dependency delivery for the corresponding release; not read by the current bootstrap. |
+
+Attach sizes and SHA-256 values plus a build/commit and dependency manifest. The tar is the
+minimum needed by this chart; the other two preserve the expected release delivery set. A release
+containing only the CAR or ZIP cannot satisfy the chart's current download/extraction path.
+`tests/application-release-assets.py --version <tag>` checks public metadata and HEAD availability
+of all three; the publication workflow reads the selected tag via `--values` and fails if the
+public assets are missing. This does not prove contents or runtime compatibility. Recheck bundle layout/hash
+and qualify the application before rollout. Public metadata is read without credentials.
 
 ## Information required from the publisher
 

@@ -106,6 +106,7 @@ Find below the values.yaml customization options :
 | couchdb.persistentVolume.size     | 5Gi                    | CouchDB PVC size. |
 | couchdb.accessModes               | ["ReadWriteOnce"]      | CouchDB PVC accessModes. |
 | couchdb.resources                 | {}                     | Resources restriction for couchdb. |
+| couchdb.uuid                      | empty                  | CouchDB server uuid. Empty: generated once and kept in the ConfigMap `<release>-cdb-uuid`, so that FullSync clients keep their replication checkpoints across restarts. Set it (32 lowercase hexadecimal characters) when rendering without cluster access (`helm template`, GitOps). |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
 | baserow.image.repository          | baserow/baserow        | Baserow image repository. Customize if using another repository. |
 | baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |

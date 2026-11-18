@@ -32,7 +32,8 @@ spec:
         - name: {{ .Chart.Name }}-cdb
           # exec hands PID 1 to tini, the image's own init: SIGTERM reaches CouchDB, which stops cleanly instead of
           # being killed at the end of the grace period, and tini reaps the processes CouchDB spawns.
-          command: ["/bin/sh", "-c", "echo '[couchdb]\nsingle_node=true' > /opt/couchdb/etc/local.d/setup.ini && exec tini -- /docker-entrypoint.sh /opt/couchdb/bin/couchdb"]
+          # setup.ini also fixes the server uuid (convertigo.couchdbUuid).
+          command: ["/bin/sh", "-c", "printf '[couchdb]\nsingle_node=true\nuuid = %s\n' \"$C8O_COUCHDB_UUID\" > /opt/couchdb/etc/local.d/setup.ini && exec tini -- /docker-entrypoint.sh /opt/couchdb/bin/couchdb"]
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: {{ .Values.couchdb.image.repository }}:{{ .Values.couchdb.image.tag }}

@@ -444,6 +444,11 @@ couchdb:
     tag: "3.5"
   admin: admin
   password: "" # New install: generated/provided; upgrade: keep the established value or Secret
+  # Server uuid, kept across restarts: FullSync clients (PouchDB) derive their replication id from the uuid
+  # returned by /convertigo/fullsync/, and lose their checkpoints when it changes. Empty: generated once, then kept
+  # in the ConfigMap <release>-cdb-uuid. Set it (32 lowercase hexadecimal characters) when the chart is rendered
+  # without cluster access (helm template, GitOps).
+  uuid: ""
   persistentVolume:
     # adapt the storage class to your environment
     storageClass: ebs-sc

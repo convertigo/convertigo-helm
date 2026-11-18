@@ -10,7 +10,7 @@ import subprocess
 import yaml
 
 CHART = Path(__file__).resolve().parents[1] / 'stable/convertigo'
-SETUP = "echo '[couchdb]\nsingle_node=true' > /opt/couchdb/etc/local.d/setup.ini"
+SETUP = "printf '[couchdb]\nsingle_node=true\nuuid = %s\n' \"$C8O_COUCHDB_UUID\" > /opt/couchdb/etc/local.d/setup.ini"  # see couchdb-uuid.py
 START = 'exec tini -- /docker-entrypoint.sh /opt/couchdb/bin/couchdb'
 
 

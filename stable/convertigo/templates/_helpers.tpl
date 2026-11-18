@@ -702,7 +702,13 @@ JAVA_OPTS is atomic because historical credentials can be embedded in arbitrary 
 
 {{- define "convertigo.defaultEnvironment_cdb" -}}
 {{- $prior := include "convertigo.previousEnvironment" (list . "-cdb") | fromJson -}}
-{{- if $prior.found -}}{{- toYaml $prior.env -}}{{- else -}}
+{{- /* The server uuid (convertigo.couchdbUuid) is not an established credential: always the current reference. */ -}}
+{{- $uuid := dict "name" "C8O_COUCHDB_UUID" "valueFrom" (dict "configMapKeyRef" (dict "name" (printf "%s-cdb-uuid" (include "convertigo.fullname" .)) "key" "uuid")) -}}
+{{- if $prior.found -}}
+  {{- $env := list -}}
+  {{- range $entry := $prior.env -}}{{- if ne $entry.name "C8O_COUCHDB_UUID" -}}{{- $env = append $env $entry -}}{{- end -}}{{- end -}}
+  {{- toYaml (append $env $uuid) -}}
+{{- else -}}
 - name: COUCHDB_USER
   {{- if and (not (include "convertigo.legacyCredentials" .)) .Values.couchdb.existingSecretUsernameKey }}
   valueFrom:
@@ -721,6 +727,7 @@ JAVA_OPTS is atomic because historical credentials can be embedded in arbitrary 
       name: {{ include "convertigo.couchSecretName" . }}
       key: {{ default "couchdb-password" .Values.couchdb.existingSecretPasswordKey }}
   {{- end }}
+{{ toYaml (list $uuid) }}
 {{- end -}}
 {{- end -}}
 
@@ -761,4 +768,23 @@ Argument: dict with "labels" (pod selector labels as YAML) and "affinity" (optio
 {{- $_ := set $anti "requiredDuringSchedulingIgnoredDuringExecution" (append $required $term) -}}
 {{- $_ := set $affinity "podAntiAffinity" $anti -}}
 {{- toYaml $affinity -}}
+{{- end -}}
+
+{{/*
+CouchDB server uuid: couchdb.uuid, else the one kept in the ConfigMap <release>-cdb-uuid, else a new one. It must
+stay stable: FullSync clients (PouchDB) derive their replication id from it and restart from the beginning of the
+changes feed when it changes.
+*/}}
+{{- define "convertigo.couchdbUuid" -}}
+{{- $provided := toString (default "" (default dict .Values.couchdb).uuid) -}}
+{{- if $provided -}}
+  {{- if not (regexMatch "^[0-9a-f]{32}$" $provided) -}}
+    {{- fail "couchdb.uuid must be 32 lowercase hexadecimal characters" -}}
+  {{- end -}}
+  {{- $provided -}}
+{{- else -}}
+  {{- $previous := lookup "v1" "ConfigMap" .Release.Namespace (printf "%s-cdb-uuid" (include "convertigo.fullname" .)) | default dict -}}
+  {{- $kept := toString (index (default dict $previous.data) "uuid" | default "") -}}
+  {{- if regexMatch "^[0-9a-f]{32}$" $kept -}}{{- $kept -}}{{- else -}}{{- uuidv4 | replace "-" "" -}}{{- end -}}
+{{- end -}}
 {{- end -}}

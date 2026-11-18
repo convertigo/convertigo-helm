@@ -1,0 +1,13 @@
+{{- if .Values.couchdb.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "convertigo.fullname" . }}-cdb-uuid
+  annotations:
+    # Kept with the CouchDB volume: a reinstall on the same data keeps the same uuid.
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+data:
+  uuid: {{ include "convertigo.couchdbUuid" . | quote }}
+{{- end }}

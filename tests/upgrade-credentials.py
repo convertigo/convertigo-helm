@@ -87,7 +87,8 @@ def call(command, env):
 
 def docs(text): return [d for d in yaml.safe_load_all(text) if d]
 def pod(d): return d['spec']['template']['spec']
-def environment(d): return pod(d)['containers'][0].get('env',[])
+# C8O_COUCHDB_UUID is a new, non-credential variable of CouchDB, checked below and in tests/couchdb-uuid.py.
+def environment(d): return [e for e in pod(d)['containers'][0].get('env',[]) if e['name']!='C8O_COUCHDB_UUID']
 def byname(ds): return {(d['kind'],d['metadata']['name']):d for d in ds}
 
 
@@ -156,6 +157,8 @@ with tempfile.TemporaryDirectory(prefix='helm-upgrade-credentials-') as tmp:
             ordinary_byname=byname(ordinary)
             for key,obj in b.items():
                 if obj['kind']=='Deployment':
+                    added=[e for e in pod(ordinary_byname[key])['containers'][0].get('env',[]) if e['name']=='C8O_COUCHDB_UUID']
+                    assert added==([] if not key[1].endswith('-cdb') else [{'name':'C8O_COUCHDB_UUID','valueFrom':{'configMapKeyRef':{'name':FULL+'-cdb-uuid','key':'uuid'}}}])
                     assert environment(ordinary_byname[key])==environment(obj), 'Ordinary upgrade changed established credentials'
                     if obj['metadata']['name'].endswith('-timescale'):
                         assert pod(ordinary_byname[key])['containers'][0]['image']==pod(obj)['containers'][0]['image'],'Ordinary upgrade changed database image'

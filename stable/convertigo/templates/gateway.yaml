@@ -1,0 +1,140 @@
+{{- $gateway := default dict .Values.gateway -}}
+{{- if $gateway.enabled -}}
+{{- if (default dict .Values.ingress).enabled -}}
+{{- fail "gateway.enabled and ingress.enabled cannot both be true: set ingress.enabled=false to expose Convertigo through the Gateway API" -}}
+{{- end -}}
+{{- $created := not (empty $gateway.gatewayClassName) -}}
+{{- if and (not $created) (not $gateway.parentRefs) -}}
+{{- fail "gateway.enabled needs gateway.parentRefs (an existing Gateway) or gateway.gatewayClassName (a Gateway created by the chart)" -}}
+{{- end -}}
+{{- $fullName := include "convertigo.fullname" . -}}
+{{- $hostnames := include "convertigo.gatewayHostnames" . | fromJsonArray -}}
+{{- $rootRedirect := true -}}
+{{- if hasKey $gateway "rootRedirectEnabled" -}}{{- $rootRedirect = $gateway.rootRedirectEnabled -}}{{- end -}}
+{{- if $created }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+  {{- with $gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ $gateway.gatewayClassName }}
+  {{- with $gateway.infrastructure }}
+  infrastructure:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      {{- if eq (len $hostnames) 1 }}
+      hostname: {{ first $hostnames | quote }}
+      {{- end }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      {{- if eq (len $hostnames) 1 }}
+      hostname: {{ first $hostnames | quote }}
+      {{- end }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ include "convertigo.tlsSecretName" . }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- if $created }}
+    - name: {{ $fullName }}
+      sectionName: https
+    {{- else }}
+    {{- toYaml $gateway.parentRefs | nindent 4 }}
+    {{- end }}
+  {{- with $hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- if $rootRedirect }}
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: {{ default "/convertigo/" .Values.rootRedirect }}
+            statusCode: 301
+    {{- end }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /convertigo
+      backendRefs:
+        - name: {{ $fullName }}
+          port: 28080
+      {{- with $gateway.timeouts }}
+      timeouts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gateway.sessionPersistence }}
+      sessionPersistence:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- if .Values.baserow.enabled }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ $fullName }}-br
+          port: 80
+      {{- with $gateway.timeouts }}
+      timeouts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+{{- if and $created (ne (toString $gateway.httpsRedirect) "false") }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullName }}-https-redirect
+  labels:
+    {{- include "convertigo.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $fullName }}
+      sectionName: http
+  {{- with $hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}
+{{- end }}

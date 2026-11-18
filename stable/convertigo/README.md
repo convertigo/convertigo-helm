@@ -75,6 +75,11 @@ Find below the values.yaml customization options :
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
 | ingress.annotations               |                        | Nginx ingress annotations for handling sticky sessions. Convertigo workers need sticky sessions based on route cookies. Default `values.yaml` provides the correct setup. |
+| gateway.enabled                   | false                  | Expose Convertigo through the Gateway API (HTTPRoute) instead of the ingress; requires `ingress.enabled=false`. See [Gateway API](#gateway-api). |
+| gateway.parentRefs                | []                     | Existing Gateway the routes attach to (name, namespace, sectionName). |
+| gateway.gatewayClassName          | empty                  | When set, the chart creates its own Gateway with HTTP and HTTPS listeners for this GatewayClass. |
+| tls.secretName                    | convertigo-tls         | TLS Secret of the ingress and of the Gateway created by the chart. |
+| tls.selfSigned                    | auto                   | Self-signed certificate generated in `tls.secretName` and kept across upgrades: `auto` for the Gateway created by the chart, `true` also for the ingress, `false` never. Never with a cert-manager issuer annotation or over your own Secret. |
 | resources                         | {}                     | Convertigo resources restriction. |
 | workspace.persistentVolume.storageClass | ebs-sc           | StorageClass for Convertigo workspace PVC. |
 | workspace.persistentVolume.size   | 5Gi                    | PVC size for Convertigo workspace. |
@@ -583,9 +588,53 @@ ingress:
 
 `publicAddr` is the hostname used by the ingress and its TLS certificate, whereas `publicUrl` is the full browser origin. `publicDomains` lists the allowed CORS origins and defaults to `publicUrl` when omitted. The image preserves a `cors.policy` already saved in the workspace; update that property in the admin console, or explicitly override it through `additionalJavaOpts` with `-Dconvertigo.engine.cors.policy=...` if necessary. CORS is not an access-control mechanism for non-browser clients.
 
-The chart uses the TLS secret `convertigo-tls`. Provision a certificate for `publicAddr`, or configure your cert-manager issuer (the chart defaults to `letsencrypt-prod`). If TLS terminates at an upstream load balancer instead, adapt the ingress redirect and forwarded-header configuration to that topology to avoid redirect loops. See the ingress-nginx [HTTPS redirect annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#server-side-https-enforcement-through-redirect).
+The chart uses the TLS secret `convertigo-tls` (`tls.secretName`). Provision a certificate for `publicAddr`, configure your cert-manager issuer (the chart defaults to `letsencrypt-prod`), or set `tls.selfSigned=true` and remove the issuer annotation for a self-signed certificate. If TLS terminates at an upstream load balancer instead, adapt the ingress redirect and forwarded-header configuration to that topology to avoid redirect loops. See the ingress-nginx [HTTPS redirect annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#server-side-https-enforcement-through-redirect).
 
 The Java options suppress detailed errors in client responses while keeping them in the engine logs, and hide the product version in API specifications. To retain selected error details instead, leave `hiding_error_information=false` and configure the `show_error_*` properties described in the guide. This does not disable API discovery.
+
+### Gateway API
+
+The Gateway API can replace the ingress (`ingress.enabled=false`, `gateway.enabled=true`). The chart then
+creates an HTTPRoute that redirects `/` to `rootRedirect`, sends `/convertigo` to Convertigo and the rest to Baserow.
+
+Attach it to a Gateway managed by your platform team:
+
+```yaml
+ingress:
+  enabled: false
+gateway:
+  enabled: true
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway-system
+      sectionName: https
+publicAddr: convertigo.example.com
+```
+
+The Gateway must allow routes from the release namespace. Or let the chart create its own Gateway for an installed
+controller, here Envoy Gateway and its `eg` GatewayClass:
+
+```yaml
+ingress:
+  enabled: false
+gateway:
+  enabled: true
+  gatewayClassName: eg
+publicAddr: convertigo.example.com
+```
+
+That Gateway listens on HTTP (redirected to HTTPS) and HTTPS with the `tls.secretName` certificate. Without a
+certificate of your own, the chart generates a self-signed one, kept across upgrades. For a trusted certificate,
+annotate the Gateway with your issuer (`gateway.annotations`, for example `cert-manager.io/cluster-issuer:
+letsencrypt-prod`), with cert-manager's Gateway API support enabled and a DNS name in `publicAddr`.
+
+The routes serve `publicAddr`, or `gateway.hostnames`; with `publicAddr: localhost` or an IP address they serve any
+host name, and `publicUrl` must then give the browser origin, for example `https://localhost:8443` through
+`kubectl port-forward` to the Gateway service. `gateway.infrastructure` sets the labels and annotations of the load
+balancer created for the Gateway, and `gateway.timeouts` the route timeouts (1 hour, as the ingress).
+
+Several Convertigo replicas with Tomcat sessions need sticky sessions: set `gateway.sessionPersistence` (for example
+`{type: Cookie, sessionName: route}`, Gateway API experimental channel) or use Redis sessions.
 
 ### HSTS belongs to the HTTPS frontend
 

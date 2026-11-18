@@ -84,5 +84,7 @@ with tempfile.TemporaryDirectory(prefix='rollout-strategy-') as tmp:
         for d in list(new.values()) + list(old.values()):
             d['spec'].pop('strategy', None)
             d['spec']['template']['spec'].pop('affinity', None)
+        for d in [new['cdb'], old['cdb']]:  # Covered by tests/couchdb-shutdown.py.
+            d['spec']['template']['spec']['containers'][0].pop('command', None)
         assert new == old, case
 print('PASS rest of the Deployments unchanged', flush=True)

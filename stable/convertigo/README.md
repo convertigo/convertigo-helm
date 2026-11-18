@@ -766,8 +766,12 @@ credentials come from generated or selected Secrets. These references do not rot
 on an already-initialized PVC. External Redis/TLS overrides still need private handling; no general
 claim is made about every externally supplied option.
 
-CouchDB and TimescaleDB use Recreate with RWO volumes. This avoids overlapping database versions
-but introduces a planned outage; retain a tested database backup/rollback procedure.
+CouchDB and TimescaleDB, and Convertigo with one replica on a workspace that is not ReadWriteMany, stop their old
+pod before starting the new one: rolling updates with `maxSurge: 0`, and a required anti-affinity with their own
+pods that keeps the new pod off a node where the old one is still terminating. Two processes never share the same
+data, and a new pod no longer waits forever for a volume still attached to another node. This behaves as Recreate,
+which these Deployments cannot switch to on upgrade with server-side apply (Helm 4). It introduces a planned outage;
+retain a tested database backup/rollback procedure. Baserow keeps Recreate.
 
 
 ## Installation credentials and upgrades

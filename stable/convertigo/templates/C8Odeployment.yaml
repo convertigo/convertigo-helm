@@ -1,4 +1,6 @@
 {{- $fresh := not (include "convertigo.existingInstallation" .) -}}
+{{- /* A lone pod on a ReadWriteOnce workspace: see convertigo.singlePodStrategy. */ -}}
+{{- $singlePod := and (not (has "ReadWriteMany" (default (list "ReadWriteOnce") .Values.workspace.accessModes))) (eq (int .Values.replicaCount) 1) (not .Values.autoscaling.enabled) -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
 {{- /* Preserve the old init container when --reuse-values omits this new setting. */ -}}
 {{- $workspaceOwnershipInitEnabled := dig "enabled" true (.Values.workspaceOwnershipInit | default dict) -}}
@@ -18,6 +20,10 @@ spec:
   {{- end }}
   {{- with .Values.progressDeadlineSeconds }}
   progressDeadlineSeconds: {{ . }}
+  {{- end }}
+  {{- if $singlePod }}
+  strategy:
+    {{- include "convertigo.singlePodStrategy" . | nindent 4 }}
   {{- end }}
   selector:
     matchLabels:
@@ -220,9 +226,14 @@ spec:
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $singlePod }}
+      affinity:
+        {{- include "convertigo.singlePodAffinity" (dict "labels" (include "convertigo.selectorLabels" .) "affinity" .Values.affinity) | nindent 8 }}
+      {{- else }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:

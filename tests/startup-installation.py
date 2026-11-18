@@ -79,8 +79,12 @@ assert 'session.store.mode=redis' in java_opts and 'session.redis.topology=senti
 assert next(x['spec']['replicas'] for x in docs if x['kind'] == 'StatefulSet' and x['metadata']['name'].endswith('-redis')) == 3
 assert not any(x['name'].endswith('_PASSWORD') for x in envs)
 for x in docs:
-    if x['kind'] == 'Deployment' and x['metadata']['name'].endswith(('-cdb', '-timescale', '-br')):
+    if x['kind'] == 'Deployment' and x['metadata']['name'].endswith('-br'):
         assert x['spec']['strategy']['type'] == 'Recreate'
+    if x['kind'] == 'Deployment' and x['metadata']['name'].endswith(('-cdb', '-timescale')):
+        # Old pod ended before the new one starts; see tests/rollout-strategy.py.
+        assert x['spec']['strategy']['rollingUpdate'] == {'maxSurge': 0, 'maxUnavailable': 1}
+        assert x['spec']['template']['spec']['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution']
 assert engine(render('--set', 'workspaceOwnershipInit.enabled=false'))['initContainers'][0]['securityContext']['runAsUser'] == 1000
 custom = engine(render('--set', 'workspaceOwnershipInit.enabled=false', '--set', 'securityContext.runAsUser=1234', '--set', 'securityContext.runAsGroup=4321'))['initContainers'][0]['securityContext']
 assert custom['runAsUser'] == 1234 and custom['runAsGroup'] == 4321

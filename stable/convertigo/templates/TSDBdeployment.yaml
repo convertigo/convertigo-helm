@@ -7,7 +7,7 @@ metadata:
     {{- include "convertigo.labels" . | nindent 4 }}-timescaledb
 spec:
   strategy:
-    type: Recreate
+    {{- include "convertigo.singlePodStrategy" . | nindent 4 }}
   replicas: 1
   selector:
     matchLabels:
@@ -21,6 +21,8 @@ spec:
       labels:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}-timescaledb
     spec:
+      affinity:
+        {{- include "convertigo.singlePodAffinity" (dict "labels" (printf "%s-timescaledb" (include "convertigo.selectorLabels" .))) | nindent 8 }}
       serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}

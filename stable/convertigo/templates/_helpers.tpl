@@ -733,3 +733,32 @@ JAVA_OPTS is atomic because historical credentials can be embedded in arbitrary 
 {{- end -}}
 {{- $image -}}
 {{- end -}}
+
+{{/*
+Single-pod Deployment on a ReadWriteOnce volume (CouchDB, TimescaleDB, a lone Convertigo): the old pod must end
+before the new one starts, or two processes share the same data on one node, and a new pod on another node waits
+forever for the volume. maxSurge 0 removes the old pod first; the required anti-affinity of
+convertigo.singlePodAffinity keeps the new pod off every node where the old one is still terminating, so it starts
+once the old one has ended, as with Recreate. Recreate itself cannot be used: switching an existing Deployment to it
+fails with server-side apply (Helm 4), because Kubernetes keeps the defaulted rollingUpdate settings.
+*/}}
+{{- define "convertigo.singlePodStrategy" -}}
+type: RollingUpdate
+rollingUpdate:
+  maxSurge: 0
+  maxUnavailable: 1
+{{- end -}}
+
+{{/*
+Affinity of a single-pod Deployment: the given affinity, plus a required anti-affinity with its own pods per node.
+Argument: dict with "labels" (pod selector labels as YAML) and "affinity" (optional user affinity).
+*/}}
+{{- define "convertigo.singlePodAffinity" -}}
+{{- $affinity := deepCopy (default dict .affinity) -}}
+{{- $anti := default dict $affinity.podAntiAffinity -}}
+{{- $required := default list $anti.requiredDuringSchedulingIgnoredDuringExecution -}}
+{{- $term := dict "topologyKey" "kubernetes.io/hostname" "labelSelector" (dict "matchLabels" (fromYaml .labels)) -}}
+{{- $_ := set $anti "requiredDuringSchedulingIgnoredDuringExecution" (append $required $term) -}}
+{{- $_ := set $affinity "podAntiAffinity" $anti -}}
+{{- toYaml $affinity -}}
+{{- end -}}

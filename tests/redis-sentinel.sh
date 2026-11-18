@@ -12,7 +12,7 @@ expect_option() {
 }
 expect_failure() {
   local output
-  if output=$(helm template sentinel "$chart" "$@" 2>&1); then
+  if output=$(helm template --set-string nocodestudio.version=fixture-published-release sentinel "$chart" "$@" 2>&1); then
     echo "Invalid configuration was accepted" >&2
     exit 1
   fi
@@ -21,13 +21,13 @@ expect_failure() {
   }
 }
 
-helm lint "$chart"
-rendered=$(helm template default "$chart")
+helm lint --set-string nocodestudio.version=fixture-published-release "$chart"
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release default "$chart")
 [[ "$rendered" != *"-Dconvertigo.engine.session.store.mode=redis"* ]]
-rendered=$(helm template embedded "$chart" --set redis.enabled=true)
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release embedded "$chart" --set redis.enabled=true)
 expect_option '-Dconvertigo.engine.session.redis.topology=single'
 expect_option '-Dconvertigo.engine.session.redis.host=embedded-convertigo-redis'
-rendered=$(helm template external "$chart" --set sessionStore.mode=redis --set sessionStore.redis.host=redis-external --set sessionStore.redis.port=6380)
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release external "$chart" --set sessionStore.mode=redis --set sessionStore.redis.host=redis-external --set sessionStore.redis.port=6380)
 expect_option '-Dconvertigo.engine.session.redis.host=redis-external'
 expect_option '-Dconvertigo.engine.session.redis.port=6380'
 secure=(--set sessionStore.redis.username=data-user
@@ -35,7 +35,7 @@ secure=(--set sessionStore.redis.username=data-user
   --set sessionStore.redis.sentinel.username=sentinel-user --set sessionStore.redis.sentinel.password=sentinel-test-password
   --set sessionStore.redis.ssl.enabled=true --set sessionStore.redis.ssl.truststore=/tls/ca.p12
   --set sessionStore.redis.ssl.keystore=/tls/client.p12 --set sessionStore.redis.ssl.keystoreType=PKCS12)
-rendered=$(helm template sentinel "$chart" "${base[@]}" "${secure[@]}")
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release sentinel "$chart" "${base[@]}" "${secure[@]}")
 expect_option '-Dconvertigo.engine.session.redis.topology=sentinel'
 expect_option '-Dconvertigo.engine.session.redis.sentinel.master=mymaster'
 expect_option '-Dconvertigo.engine.session.redis.sentinel.nodes=sentinel-0:26379,sentinel-1:26379,sentinel-2:26379'
@@ -48,7 +48,7 @@ expect_option '-Dconvertigo.engine.session.redis.ssl=true'
 expect_option '-Dconvertigo.engine.session.redis.ssl.truststore=/tls/ca.p12'
 expect_option '-Dconvertigo.engine.session.redis.ssl.keystore=/tls/client.p12'
 [[ "$rendered" != *"name: sentinel-convertigo-redis"* ]]
-rendered=$(helm template sentinel "$chart" "${base[@]}" --set-string 'sessionStore.redis.sentinel.nodes=sentinel-0:26379 sentinel-1:26379 sentinel-0:26379')
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release sentinel "$chart" "${base[@]}" --set-string 'sessionStore.redis.sentinel.nodes=sentinel-0:26379 sentinel-1:26379 sentinel-0:26379')
 expect_option '-Dconvertigo.engine.session.redis.sentinel.nodes=sentinel-0:26379,sentinel-1:26379'
 expect_failure --set sessionStore.redis.topology=cluster
 expect_failure "${base[@]}" --set redis.enabled=true
@@ -59,7 +59,7 @@ expect_failure "${base[@]}" --set-json 'sessionStore.redis.sentinel.nodes=["host
 expect_failure "${base[@]}" --set-json 'sessionStore.redis.sentinel.nodes=["user:secret@host:26379"]'
 # Embedded Redis with Sentinel
 embedded=(--set redis.enabled=true --set redis.sentinel.enabled=true)
-rendered=$(helm template ha "$chart" "${embedded[@]}")
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release ha "$chart" "${embedded[@]}")
 expect_option 'kind: StatefulSet'
 expect_option 'name: ha-convertigo-redis-headless'
 expect_option 'kind: PodDisruptionBudget'
@@ -69,13 +69,14 @@ expect_option '-Dconvertigo.engine.session.redis.sentinel.nodes=ha-convertigo-re
 [[ "$rendered" != *"-Dconvertigo.engine.session.redis.host="* ]]
 # The single Redis is not rendered
 [[ "$rendered" != *'"--appendonly"'* ]]
-# Password from an existing secret: never rendered, expanded by Kubernetes
-rendered=$(helm template ha "$chart" "${embedded[@]}" --set redis.auth.existingSecret=redis-auth)
+# Password from an existing Secret: mounted only in the engine init and referenced by Redis pods
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release ha "$chart" "${embedded[@]}" --set redis.auth.existingSecret=redis-auth)
 expect_option 'name: redis-auth'
-expect_option '-Dconvertigo.engine.session.redis.password=$(REDIS_PASSWORD)'
+expect_option 'path: redis-password'
+[[ "$rendered" != *'-Dconvertigo.engine.session.redis.password=$(REDIS_PASSWORD)'* ]]
 [[ "$rendered" != *"ChangeMe!"*"session.redis.password"* && "$rendered" != *"session.redis.password=ChangeMe!"* ]]
 # Password and TLS files provided by user volumes (Vault agent)
-rendered=$(helm template ha "$chart" "${embedded[@]}" --set redis.auth.passwordFile=/vault/secrets/redis-password \
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release ha "$chart" "${embedded[@]}" --set redis.auth.passwordFile=/vault/secrets/redis-password \
   --set redis.tls.enabled=true --set redis.tls.mountPath=/vault/secrets)
 expect_option 'REDIS_PASSWORD_FILE'
 expect_option 'value: "/vault/secrets/redis.crt"'
@@ -83,7 +84,7 @@ expect_option '-Dconvertigo.engine.session.redis.ssl.truststore=/vault/secrets/t
 [[ "$rendered" != *"secretName: "*"redis-tls"* ]]
 [[ "$rendered" != *"session.redis.password=ChangeMe!"* ]]
 # Single embedded Redis with the password in a secret
-rendered=$(helm template single "$chart" --set redis.enabled=true --set redis.auth.existingSecret=redis-auth)
+rendered=$(helm template --set-string nocodestudio.version=fixture-published-release single "$chart" --set redis.enabled=true --set redis.auth.existingSecret=redis-auth)
 expect_option '- "$(REDIS_PASSWORD)"'
 expect_option '-Dconvertigo.engine.session.redis.host=single-convertigo-redis'
 [[ "$rendered" != *"kind: StatefulSet"* ]]

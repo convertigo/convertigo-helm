@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import yaml
 
 chart = Path(__file__).resolve().parents[1] / 'stable/convertigo'
 lock = json.loads((chart / 'files/baserow-plugins/c8oforms.json').read_text())
@@ -18,11 +19,11 @@ config_map = 'plugin-convertigo-c8oforms-' + lock['sha256'][:16]
 
 
 def render(*options, chart_dir=chart):
-    return subprocess.check_output(['helm', 'template', 'plugin', str(chart_dir), *options], text=True)
+    return subprocess.check_output(['helm', 'template', 'plugin', str(chart_dir), '--set-string', 'nocodestudio.version=fixture-published-release', '--set', 'admin.existingSecret=render-admin', '--set', 'credentials.existingSecret=render-credentials', '--set', 'couchdb.uuid=00000000000000000000000000000848', *options], text=True)
 
 
 def failure(*options, chart_dir=chart):
-    result = subprocess.run(['helm', 'template', 'plugin', str(chart_dir), *options], text=True, capture_output=True)
+    result = subprocess.run(['helm', 'template', 'plugin', str(chart_dir), '--set-string', 'nocodestudio.version=fixture-published-release', '--set', 'admin.existingSecret=render-admin', '--set', 'credentials.existingSecret=render-credentials', '--set', 'couchdb.uuid=00000000000000000000000000000848', *options], text=True, capture_output=True)
     assert result.returncode != 0, 'Invalid configuration was accepted: %s' % (options,)
     return result.stderr
 
@@ -37,7 +38,7 @@ def plugin_objects(rendered):
             or 'PIP_NO_BUILD_ISOLATION' in d or 'c8oforms.convertigo.net' in d]
 
 
-subprocess.check_call(['helm', 'lint', str(chart)], stdout=subprocess.DEVNULL)
+subprocess.check_call(['helm', 'lint', str(chart), '--set-string', 'nocodestudio.version=fixture-published-release'], stdout=subprocess.DEVNULL)
 enabled = ('--set', 'baserow.plugins.c8oforms.enabled=true')
 
 # Disabled by default, and the same rendering as before the key existed (--reuse-values)
@@ -56,9 +57,10 @@ for tag in lock['tested_baserow_versions']:
     docs = documents(render(*enabled, '--set', 'baserow.image.tag=' + tag))
     deployment = docs['templates/BRdeployment.yaml']
     assert 'image: baserow/baserow:' + tag in deployment
-    assert '- name: BASEROW_PLUGIN_URLS\n              value: "%s"' % url in deployment
+    environment = {e['name']: e for e in yaml.safe_load(deployment)['spec']['template']['spec']['containers'][0]['env']}
+    assert environment['BASEROW_PLUGIN_URLS']['value'] == url
     # Offline install: pip builds the plugin with the setuptools of the image (inverted variable)
-    assert '- name: PIP_NO_BUILD_ISOLATION\n              value: "false"' in deployment
+    assert environment['PIP_NO_BUILD_ISOLATION']['value'] == 'false'
     assert '- name: c8oforms-plugin\n          configMap:\n            name: %s' % config_map in deployment
     assert '- name: c8oforms-plugin\n              mountPath: /c8o-plugins\n              readOnly: true' in deployment
     assert '- name: br-plugins\n          emptyDir: {}' in deployment

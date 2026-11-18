@@ -22,6 +22,9 @@ jobs:
       - name: Check the release image
         run: tests/release-image.sh
 
+      - name: Check public application release assets
+        run: python3 tests/application-release-assets.py --values stable/convertigo/values.yaml
+
       - name: Package Helm Chart
         run: |
           cd stable/convertigo 

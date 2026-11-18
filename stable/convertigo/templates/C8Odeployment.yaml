@@ -1,3 +1,6 @@
+{{- $fresh := not (include "convertigo.existingInstallation" .) -}}
+{{- /* A lone pod on a ReadWriteOnce workspace: see convertigo.singlePodStrategy. */ -}}
+{{- $singlePod := and (not (has "ReadWriteMany" (default (list "ReadWriteOnce") .Values.workspace.accessModes))) (eq (int .Values.replicaCount) 1) (not .Values.autoscaling.enabled) -}}
 {{- $sessionMode := include "convertigo.sessionStoreMode" . -}}
 {{- /* Preserve the old init container when --reuse-values omits this new setting. */ -}}
 {{- $workspaceOwnershipInitEnabled := dig "enabled" true (.Values.workspaceOwnershipInit | default dict) -}}
@@ -18,15 +21,21 @@ spec:
   {{- with .Values.progressDeadlineSeconds }}
   progressDeadlineSeconds: {{ . }}
   {{- end }}
+  {{- if $singlePod }}
+  strategy:
+    {{- include "convertigo.singlePodStrategy" . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        checksum/credential-bootstrap: {{ include (print $.Template.BasePath "/credential-bootstrap-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+        checksum/workspace-installer: {{ include (print $.Template.BasePath "/configmapInstallCarFiles.yaml") . | sha256sum }}
       labels:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}
     spec:
@@ -41,29 +50,80 @@ spec:
         - name: c8o-workspace
           persistentVolumeClaim:
             claimName: {{ include "convertigo.fullname" . }}-c8o-workspace
-        - name: c8o-install-car-files
+        - name: {{ include "convertigo.fullname" . }}-workspace-setup
           configMap:
-              name: c8o-install-car-files
-              defaultMode: 0777
+              name: {{ include "convertigo.fullname" . }}-workspace-setup
+              defaultMode: 0555
         {{- if $embeddedRedisTls }}
         - name: redis-tls
           secret:
             secretName: {{ include "convertigo.redisTlsSecretName" . }}
         {{- end }}
-        {{- if .Values.localWork.enabled }}
+        {{- if (default dict .Values.localWork).enabled }}
         - name: c8o-local-work
           {{- toYaml .Values.localWork.volume | nindent 10 }}
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if $fresh }}
+        - name: admin-credential
+          secret:
+            secretName: {{ include "convertigo.adminSecretName" . }}
+            defaultMode: 0444
+            items:
+              - key: {{ default "password" (.Values.admin | default dict).passwordKey }}
+                path: password
+        - name: credential-bootstrap
+          configMap:
+            name: {{ include "convertigo.fullname" . }}-credential-bootstrap
+        - name: installation-credentials
+          projected:
+            defaultMode: 0444
+            sources:
+              {{- if include "convertigo.customPassphrase" . }}
+              - secret:
+                  name: {{ include "convertigo.cryptoSecretName" . }}
+                  items:
+                    - key: {{ default "crypto-passphrase" (.Values.crypto | default dict).passphraseKey }}
+                      path: crypto-passphrase
+              {{- end }}
+              - secret:
+                  name: {{ include "convertigo.baserowAdminSecretName" . }}
+                  items:
+                    - key: {{ default "baserow-admin-password" (.Values.baserow.admin | default dict).passwordKey }}
+                      path: baserow-admin-password
+              - secret:
+                  name: {{ include "convertigo.timescaleSecretName" . }}
+                  items:
+                    - key: {{ default "postgres-password" .Values.timescaledb.existingSecretPasswordKey }}
+                      path: postgres-password
+                    - key: {{ default "billing-password" .Values.timescaledb.existingSecretBillingPasswordKey }}
+                      path: billing-password
+              - secret:
+                  name: {{ include "convertigo.couchSecretName" . }}
+                  items:
+                    - key: {{ default "couchdb-password" .Values.couchdb.existingSecretPasswordKey }}
+                      path: couchdb-password
+                    {{- if .Values.couchdb.existingSecretUsernameKey }}
+                    - key: {{ .Values.couchdb.existingSecretUsernameKey }}
+                      path: couchdb-username
+                    {{- end }}
+              {{- if and .Values.redis.enabled .Values.redis.auth.enabled (not .Values.redis.auth.passwordFile) }}
+              - secret:
+                  name: {{ include "convertigo.redisSecretName" . }}
+                  items:
+                    - key: {{ default "redis-password" .Values.redis.auth.existingSecretPasswordKey }}
+                      path: redis-password
+              {{- end }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           {{- if $redisPasswordFile }}
           {{- /* The password file can be written by a sidecar (Vault agent) after the container starts */}}
-          command: ["/bin/sh", "-c", "i=0; while [ ! -s \"$REDIS_PASSWORD_FILE\" ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; export JAVA_OPTS=\"$JAVA_OPTS -Dconvertigo.engine.session.redis.password=$(cat \"$REDIS_PASSWORD_FILE\")\"; /home/convertigo/scripts/installCarFiles.sh && exec /docker-entrypoint.sh convertigo"]
+          command: ["/bin/sh", "-c", "i=0; while [ ! -s \"$REDIS_PASSWORD_FILE\" ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; export JAVA_OPTS=\"$JAVA_OPTS -Dconvertigo.engine.session.redis.password=$(cat \"$REDIS_PASSWORD_FILE\")\"; exec /docker-entrypoint.sh convertigo"]
           {{- else }}
-          command: ["/bin/sh", "-c", "/home/convertigo/scripts/installCarFiles.sh && exec /docker-entrypoint.sh convertigo"]
+          command: ["/bin/sh", "-c", "exec /docker-entrypoint.sh convertigo"]
           {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -71,14 +131,14 @@ spec:
           volumeMounts:
             - name: c8o-workspace
               mountPath: /workspace
-            - name: c8o-install-car-files
+            - name: {{ include "convertigo.fullname" . }}-workspace-setup
               mountPath: /home/convertigo/scripts
             {{- if $embeddedRedisTls }}
             - name: redis-tls
               mountPath: {{ include "convertigo.redisTlsMountPath" . }}
               readOnly: true
             {{- end }}
-            {{- if .Values.localWork.enabled }}
+            {{- if (default dict .Values.localWork).enabled }}
             - name: c8o-local-work
               mountPath: {{ .Values.localWork.mountPath }}
             {{- end }}
@@ -86,31 +146,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
-            {{- if $embeddedRedis }}
-            {{- include "convertigo.redisPasswordEnv" . | trim | nindent 12 }}
-            {{- end }}
-            - name: JAVA_OPTS
-              value: {{ include "convertigo.javaOpts" . | quote }}
-            - name: JXMX
-              value: '{{ .Values.image.jxmx }}'
-            - name: LOG_STDOUT
-              value: "true"
-            - name: LOG_FILE
-              value: "true"
-            - name: COOKIE_PATH
-              value: "/convertigo"
-            - name: COOKIE_SECURE
-              value: "{{ .Values.ssl_only }}"
-            - name: COOKIE_SAMESITE
-              value: lax
-            - name: SESSION_TIMEOUT
-              value: "30"
-            - name: DISABLE_SUDO
-              value: "false"
-            - name: PUBLIC_DOMAINS
-              value: {{ include "convertigo.publicDomains" . | quote }}
-            - name: BASEROW_PUBLIC_URL
-              value: {{ include "convertigo.baserowPublicUrl" . | quote }}
+            {{- include "convertigo.componentEnvironment" (list . "-convertigo" (include "convertigo.defaultEnvironment_convertigo" .) (list "JAVA_OPTS" "REDIS_PASSWORD" "REDIS_PASSWORD_FILE")) | nindent 12 }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -140,6 +176,16 @@ spec:
             successThreshold: {{ .Values.readinessProbe.successThreshold }}
           {{- end }}
 
+          {{- $startup := .Values.startupProbe | default dict }}
+          {{- if dig "enabled" true $startup }}
+          startupProbe:
+            exec:
+              command: {{ toJson (default (list "sh" "-c" "s=$(curl -fsS --max-time 5 http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.projects=KO'") ($startup.exec | default dict).command) }}
+            periodSeconds: {{ default 10 $startup.periodSeconds }}
+            timeoutSeconds: {{ default 6 $startup.timeoutSeconds }}
+            failureThreshold: {{ default 60 $startup.failureThreshold }}
+          {{- end }}
+
           {{- /* Liveness probe */}}
           livenessProbe:
             httpGet:
@@ -152,36 +198,50 @@ spec:
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if or $workspaceOwnershipInitEnabled .Values.extraInitContainers }}
       initContainers:
+        - name: workspace-setup
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/bash", "/home/convertigo/scripts/installCarFiles.sh"]
+          securityContext:
+            runAsUser: {{ ternary 0 (include "convertigo.runAsUserId" . | int) $workspaceOwnershipInitEnabled }}
+            runAsGroup: {{ include "convertigo.runAsGroupId" . }}
+            allowPrivilegeEscalation: false
+          resources:
+            {{- toYaml ((.Values.projectInstallation | default dict).resources | default dict) | nindent 12 }}
+          volumeMounts:
+            - name: c8o-workspace
+              mountPath: /workspace
+            - name: {{ include "convertigo.fullname" . }}-workspace-setup
+              mountPath: /home/convertigo/scripts
+              readOnly: true
+            {{- if $fresh }}
+            - name: admin-credential
+              mountPath: /run/convertigo-admin
+              readOnly: true
+            - name: installation-credentials
+              mountPath: /run/convertigo-installation
+              readOnly: true
+            - name: credential-bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+            {{- end }}
         {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if $workspaceOwnershipInitEnabled }}
-        - command:
-          - 'sh'
-          - '-c'
-          - 'chown {{ template "convertigo.runAsUserId" . }}:{{ template "convertigo.runAsGroupId" . }} /workspace || true'
-          image: busybox
-          imagePullPolicy: Always
-          name: volume-mount-hack
-          securityContext: 
-            runAsUser: 0
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-          volumeMounts:
-              - name: c8o-workspace
-                mountPath: /workspace
-        {{- end }}
-      {{- end }}
-      
+
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $singlePod }}
+      affinity:
+        {{- include "convertigo.singlePodAffinity" (dict "labels" (include "convertigo.selectorLabels" .) "affinity" .Values.affinity) | nindent 8 }}
+      {{- else }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:

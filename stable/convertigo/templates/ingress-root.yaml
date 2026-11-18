@@ -33,7 +33,7 @@ spec:
   tls:
     - hosts:
       - {{ .Values.publicAddr }}
-      secretName: convertigo-tls
+      secretName: {{ include "convertigo.tlsSecretName" . }}
 
   rules:
     - host: {{ .Values.publicAddr }}

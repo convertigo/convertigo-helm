@@ -1,43 +1,70 @@
-replicaCount: 2
+# Example only: select classes and an existing Gateway that exist on your OKS cluster.
+# No cluster context or credentials belong in this file.
+replicaCount: 3
+publicAddr: demo.example.com
+ssl_only: "true"
+progressDeadlineSeconds: 1800
 
-publicAddr: my-public-domain.com # replace with your real public hostname
+credentials:
+  existingSecret: platform-installation
+
+admin:
+  existingSecret: platform-admin
+  passwordKey: password
+
+# Envoy Gateway / HTTPRoute is supplied separately; do not install an Ingress controller here.
 ingress:
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    acme.cert-manager.io/http01-edit-in-place: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: 500m
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  enabled: false
   rootRedirectEnabled: false
+
+awsMarketplace:
+  enabled: false
 
 serviceAccount:
   create: true
+
+workspace:
+  accessModes: [ReadWriteMany]
+  persistentVolume:
+    storageClass: longhorn
+    size: 4Gi
+
+sharedWorkspaceSync:
+  enabled: true
 
 redis:
   enabled: true
   auth:
     enabled: true
-    password: "devredis"
-
-workspace:
-  persistentVolume:
-    storageClass: nfs-rwx
-    size: 4Gi
-  accessModes:
-    - ReadWriteMany
-
-sharedWorkspaceSync:
-  enabled: true
-
-timescaledb:
-  persistentVolume:
-    storageClass: bsu-gp2
+    existingSecret: platform-redis
+    existingSecretPasswordKey: redis-password
+  sentinel:
+    enabled: true
+    replicas: 3
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 1Gi
 
 baserow:
+  existingSecret: platform-database
+  existingSecretPasswordKey: baserow-password
+  plugins:
+    c8oforms:
+      enabled: true
   persistentVolume:
-    storageClass: bsu-gp2
+    storageClass: longhorn
+
+timescaledb:
+  existingSecret: platform-database
+  existingSecretPasswordKey: postgres-password
+  existingSecretBillingPasswordKey: billing-password
+  persistentVolume:
+    storageClass: longhorn
 
 couchdb:
+  existingSecret: platform-couchdb
+  existingSecretUsernameKey: username
+  existingSecretPasswordKey: password
   persistentVolume:
-    storageClass: bsu-gp2
+    storageClass: longhorn

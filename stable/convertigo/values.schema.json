@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "nocodestudio": {
+      "type": "object",
+      "properties": {
+        "archiveSha256": {
+          "type": "string",
+          "pattern": "^([a-fA-F0-9]{64})?$",
+          "description": "Empty or exactly 64 hexadecimal characters."
+        }
+      }
+    }
+  }
+}

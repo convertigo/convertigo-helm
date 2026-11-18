@@ -54,7 +54,7 @@ Find below the values.yaml customization options :
 | serverBuild                       |                        | Convertigo 8.5.0+. What the server builds (`server_build`), each level including those before it: `none`, `sources` (Java sources of the projects), `studio` (builds started from the web Studio: nodejs, npm packages, applications), `all` (applications deployed without their build, built at startup). Empty: the administrators decide in the configuration, `none` at first. A value: imposed. |
 | redis.enabled                     | false                  | Deploy the embedded standalone Redis service. When false, use `sessionStore.mode=redis` and `sessionStore.redis.*` to configure external Redis. |
 | redis.auth.enabled                | true                   | Enable Redis AUTH for the embedded Redis. |
-| redis.auth.password               | ChangeMe!              | Redis AUTH password used by the embedded Redis and injected into Convertigo when Redis is enabled. |
+| redis.auth.password | | Historical values remain accepted; managed Redis credentials use generated or existing Secrets. |
 | redis.auth.existingSecret         |                        | Existing secret holding the Redis password (key `redis.auth.existingSecretPasswordKey`, default `redis-password`), used instead of `redis.auth.password`. |
 | redis.auth.passwordFile           |                        | File holding the Redis password, provided in the Redis and Convertigo pods by your own volumes (for example a Vault agent). Used instead of `password` and `existingSecret`. |
 | redis.tls.enabled                 | false                  | Enable TLS on the embedded Redis and configure Convertigo to connect with `rediss`. |
@@ -68,25 +68,32 @@ Find below the values.yaml customization options :
 | redis.podAnnotations, podSecurityContext, securityContext, nodeSelector, tolerations, affinity | | Pod settings of the Redis pods. |
 | redis.extraVolumes, extraVolumeMounts, extraContainers, extraInitContainers | [] | Additional volumes and containers of the Redis pods, for example a Vault agent. |
 | nocodestudio.enable               | true                   | Enable installation of Convertigo No Code Studio (C8oForms projects). |
-| nocodestudio.version              | 2.1.14                 | The Convertigo No Code Studio version for Citizen Dev applications to be deployed |
+| nocodestudio.version              | 2.1.23                 | Public GitHub release tag used when archiveUrl is empty. |
+| nocodestudio.archiveUrl           | empty                  | Optional complete HTTPS standalone tar URL; private test values must never be committed. |
+| nocodestudio.archiveSha256        | empty                  | Optional 64-character hexadecimal SHA-256 of the standalone tar; checked before extraction. |
 | publicAddr                        | localhost              | Public hostname used by the ingress rules. |
 | publicUrl                         |                        | Full public origin users will use in browsers, including protocol and optional port, without a trailing path. Defaults to `https://publicAddr`. |
 | publicDomains                     |                        | Public CORS origins injected into Convertigo `PUBLIC_DOMAINS`. Defaults to `publicUrl`. Use `#` as separator for multiple origins. |
 | ingress.enabled                   | true                   | Set to true if you want to deploy an ingress (recommended in most cases). |
 | ingress.className                 | nginx                  | Default is Nginx ingress. Ensure that an Nginx controller is deployed in your cluster. |
 | ingress.annotations               |                        | Nginx ingress annotations for handling sticky sessions. Convertigo workers need sticky sessions based on route cookies. Default `values.yaml` provides the correct setup. |
+| gateway.enabled                   | false                  | Expose Convertigo through the Gateway API (HTTPRoute) instead of the ingress; requires `ingress.enabled=false`. See [Gateway API](#gateway-api). |
+| gateway.parentRefs                | []                     | Existing Gateway the routes attach to (name, namespace, sectionName). |
+| gateway.gatewayClassName          | empty                  | When set, the chart creates its own Gateway with HTTP and HTTPS listeners for this GatewayClass. |
+| tls.secretName                    | convertigo-tls         | TLS Secret of the ingress and of the Gateway created by the chart. |
+| tls.selfSigned                    | auto                   | Self-signed certificate generated in `tls.secretName` and kept across upgrades: `auto` for the Gateway created by the chart, `true` also for the ingress, `false` never. Never with a cert-manager issuer annotation or over your own Secret. |
 | resources                         | {}                     | Convertigo resources restriction. |
 | workspace.persistentVolume.storageClass | ebs-sc           | StorageClass for Convertigo workspace PVC. |
 | workspace.persistentVolume.size   | 5Gi                    | PVC size for Convertigo workspace. |
 | workspace.accessModes             | ["ReadWriteOnce"]      | AccessModes for Convertigo workspace PVC. |
 | timescaledb.enabled               | true                   | Required for usage and license billing. Set to false only if using an external TimescaleDB. |
 | timescaledb.image.repository      | timescale/timescaledb  | TimescaleDB image repository. Customize if using another repository. |
-| timescaledb.image.tag             | latest-pg16            | TimescaleDB image tag. Customize if using a specific version. |
+| timescaledb.image.tag             | 2.32.0-pg16           | Pinned fresh-install image, PostgreSQL 16. Existing database images are preserved on upgrade. |
 | timescaledb.user                  | postgres               | Database username Convertigo will use to connect to TimescaleDB. Customize as needed. |
-| timescaledb.password              | ChangeMe!              | Database password Convertigo will use to connect to TimescaleDB. Customize as needed. |
+| timescaledb.password | | Historical values remain accepted; use generated or existing credentials. |
 | timescaledb.billing_database      | c8oAnalytics           | Database name for storing usage analytics data. |
 | timescaledb.billing_user          | c8oAnalytics           | Username for accessing the billing database. |
-| timescaledb.billing_password      | c8oAnalytics           | Password for accessing the billing database. |
+| timescaledb.billing_password | | Historical values remain accepted; use generated or existing credentials. |
 | timescaledb.persistentVolume.storageClass | ebs-sc         | TimescaleDB PVC storageClass. |
 | timescaledb.persistentVolume.size         | 5Gi            | TimescaleDB PVC size. |
 | timescaledb.accessModes                   | ["ReadWriteOnce"] | TimescaleDB PVC accessModes. |
@@ -94,24 +101,25 @@ Find below the values.yaml customization options :
 | couchdb.enabled                   | true                   | Set to false when using an external CouchDB instance; skips deploying the bundled database and related resources. |
 | couchdb.urlOverride               |                        | Optional full CouchDB URL (including protocol and port) for Convertigo to use instead of the internal service. |
 | couchdb.existingSecret            |                        | Name of an existing secret providing CouchDB credentials (same namespace by default). |
-| couchdb.existingSecretNamespace   |                        | Namespace of the existing CouchDB credentials secret (defaults to the release namespace). |
+| couchdb.existingSecretNamespace | | Credential Secrets must be in the release namespace. |
 | couchdb.existingSecretUsernameKey |                        | Key inside the existing secret for the CouchDB username. |
-| couchdb.existingSecretPasswordKey |                        | Key inside the existing secret for the CouchDB password. |
+| couchdb.existingSecretPasswordKey | couchdb-password | Password key in the selected Secret. |
 | couchdb.existingSecretOptional    | false                  | Set to true to ignore missing/invalid existing secrets and fall back to inline values. |
 | couchdb.image.repository          | couchdb                | CouchDB image repository. Customize if using another repository. |
 | couchdb.image.tag                 | 3.5                    | CouchDB image tag. Customize if using a specific version. |
 | couchdb.admin                     | admin                  | CouchDB admin username. Used for account configuration, offline features, and No Code studio projects. |
-| couchdb.password                  | fullsyncpassword       | CouchDB admin password. |
+| couchdb.password | | Historical values remain accepted; use generated or existing credentials. |
 | couchdb.persistentVolume.storageClass | ebs-sc             | CouchDB PVC storageClass. |
 | couchdb.persistentVolume.size     | 5Gi                    | CouchDB PVC size. |
 | couchdb.accessModes               | ["ReadWriteOnce"]      | CouchDB PVC accessModes. |
 | couchdb.resources                 | {}                     | Resources restriction for couchdb. |
+| couchdb.uuid                      | empty                  | CouchDB server uuid. Empty: generated once and kept in the ConfigMap `<release>-cdb-uuid`, so that FullSync clients keep their replication checkpoints across restarts. Set it (32 lowercase hexadecimal characters) when rendering without cluster access (`helm template`, GitOps). |
 | baserow.enabled                   | true                   | Set to true to use the integrated Baserow No Code database for No Code Studio and Low Code applications. |
 | baserow.image.repository          | baserow/baserow        | Baserow image repository. Customize if using another repository. |
 | baserow.image.tag                 | 1.34.5                 | Baserow image tag. Customize if using a specific version. Upgrading from 1.30.1 migrates the Baserow database: see [Baserow 1.34.5](#baserow-1345). |
 | baserow.baserow_db                | baserow                | PostgreSQL database name for Baserow. It will be created automatically. |
 | baserow.baserow_user              | baserow                | PostgreSQL username for Baserow. |
-| baserow.baserow_password          | N0Passworw0rd          | PostgreSQL password for Baserow. |
+| baserow.baserow_password | | Historical values remain accepted; use generated or existing credentials. |
 | baserow.baserow_public_url        |                        | Optional Baserow-specific external URL. Defaults to `publicUrl`. |
 | baserow.persistentVolume.storageClass | ebs-sc             | Baserow PVC storageClass. |
 | baserow.persistentVolume.size         | 5Gi                | Baserow PVC size. |
@@ -195,7 +203,7 @@ one of the new release, update `c8oforms.json` (release, commit, sha256, tested 
 versions) and the archive name in `values.yaml` and this README.
 
 To exercise the upgrade without Kubernetes, first pull `baserow/baserow:1.30.1`,
-`baserow/baserow:1.34.5` and `timescale/timescaledb:latest-pg16`, then run
+`baserow/baserow:1.34.5` and `timescale/timescaledb:2.32.0-pg16`, then run
 `python3 tests/baserow-upgrade.py`. It uses an internal Docker network, the chart's rendered
 startup command and plugin archive, and disposable credentials. It verifies linked rows,
 formulas, token continuity, migrations, aggregations, restart and plugin removal. Containers
@@ -261,7 +269,7 @@ helm upgrade --install convertigo ./stable/convertigo \
   --set couchdb.existingSecretPasswordKey=password
 ```
 
-If the secret might be missing, add `--set couchdb.existingSecretOptional=true` to fall back to inline credentials.
+Credential Secrets must exist in the release namespace. Missing required keys stop initialization; no inline fallback is used.
 
 ## External Redis for session store
 
@@ -360,7 +368,9 @@ it needs the extended key usages `serverAuth` and `clientAuth`, and the subject 
 `*.<fullname>-redis-headless.<namespace>.svc.cluster.local` and `localhost`.
 
 Tested on Kubernetes 1.37 with Redis 7.4.1 and Convertigo 8.4.7, mTLS with STRICT verification and the
-secrets written by a sidecar, two Convertigo pods, a client checking its session every 0.5 s:
+secrets written by a sidecar, two Convertigo pods, a client checking its session every 0.5 s.
+These are historical observations for that configuration, not a guarantee for every session or failure.
+Requalify with authenticated session data using [the protocol](../../docs/session-failover-test.md):
 
 | Event | Result |
 | --- | --- |
@@ -580,9 +590,54 @@ ingress:
 
 `publicAddr` is the hostname used by the ingress and its TLS certificate, whereas `publicUrl` is the full browser origin. `publicDomains` lists the allowed CORS origins and defaults to `publicUrl` when omitted. The image preserves a `cors.policy` already saved in the workspace; update that property in the admin console, or explicitly override it through `additionalJavaOpts` with `-Dconvertigo.engine.cors.policy=...` if necessary. CORS is not an access-control mechanism for non-browser clients.
 
-The chart uses the TLS secret `convertigo-tls`. Provision a certificate for `publicAddr`, or configure your cert-manager issuer (the chart defaults to `letsencrypt-prod`). If TLS terminates at an upstream load balancer instead, adapt the ingress redirect and forwarded-header configuration to that topology to avoid redirect loops. See the ingress-nginx [HTTPS redirect annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#server-side-https-enforcement-through-redirect).
+The chart uses the TLS secret `convertigo-tls` (`tls.secretName`). Provision a certificate for `publicAddr`, configure your cert-manager issuer (the chart defaults to `letsencrypt-prod`), or set `tls.selfSigned=true` and remove the issuer annotation for a self-signed certificate. If TLS terminates at an upstream load balancer instead, adapt the ingress redirect and forwarded-header configuration to that topology to avoid redirect loops. See the ingress-nginx [HTTPS redirect annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#server-side-https-enforcement-through-redirect).
 
 The Java options suppress detailed errors in client responses while keeping them in the engine logs, and hide the product version in API specifications. To retain selected error details instead, leave `hiding_error_information=false` and configure the `show_error_*` properties described in the guide. This does not disable API discovery.
+
+### Gateway API
+
+The Gateway API can replace the ingress (`ingress.enabled=false`, `gateway.enabled=true`). The chart then
+creates an HTTPRoute that redirects `/` to `rootRedirect`, sends `/convertigo` to Convertigo and the rest to Baserow.
+Install compatible Gateway API CRDs and a controller separately; the chart does not install either.
+
+Attach it to a Gateway managed by your platform team:
+
+```yaml
+ingress:
+  enabled: false
+gateway:
+  enabled: true
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway-system
+      sectionName: https
+publicAddr: convertigo.example.com
+```
+
+The Gateway must allow routes from the release namespace. Or let the chart create its own Gateway for an installed
+controller, here Envoy Gateway and its `eg` GatewayClass:
+
+```yaml
+ingress:
+  enabled: false
+gateway:
+  enabled: true
+  gatewayClassName: eg
+publicAddr: convertigo.example.com
+```
+
+That Gateway listens on HTTP (redirected to HTTPS) and HTTPS with the `tls.secretName` certificate. Without a
+certificate of your own, the chart generates a self-signed one, kept across upgrades. For a trusted certificate,
+annotate the Gateway with your issuer (`gateway.annotations`, for example `cert-manager.io/cluster-issuer:
+letsencrypt-prod`), with cert-manager's Gateway API support enabled and a DNS name in `publicAddr`.
+
+The routes serve `publicAddr`, or `gateway.hostnames`; with `publicAddr: localhost` or an IP address they serve any
+host name, and `publicUrl` must then give the browser origin, for example `https://localhost:8443` through
+`kubectl port-forward` to the Gateway service. `gateway.infrastructure` sets the labels and annotations of the load
+balancer created for the Gateway, and `gateway.timeouts` the route timeouts (1 hour, as the ingress).
+
+Several Convertigo replicas with Tomcat sessions need sticky sessions: set `gateway.sessionPersistence` (for example
+`{type: Cookie, sessionName: route}`, Gateway API experimental channel) or use Redis sessions.
 
 ### HSTS belongs to the HTTPS frontend
 
@@ -736,3 +791,102 @@ EOF
 ```
 
 The Chart ingress will automatically use let's encrypt to setup the SSL certificate. Be sure to use a custom domain name such as *publicAddr* in your values.yaml *my-app.mydomain.com* as let's encrypt will not honor default *k8s-ingress-ingress-XXXXX* AWS load balancer domain names.
+
+
+## Workspace startup and administrator provisioning
+
+Project installation runs in `workspace-setup`, before the engine container. It requires cross-node
+advisory locking on the shared workspace; inspect this property of your RWX driver. The startup probe
+allows up to 10 minutes for engine/project loading before liveness starts. Installation time itself
+is outside the main container probes. A completion marker is published only after ownership repair.
+Existing projects are preserved; interrupted legacy content must be inspected rather than overwritten.
+
+Only the first installation generates a 48-character administrator Secret when `admin.existingSecret`
+is empty. An upgrade reuses a generated Secret through lookup and never creates a replacement.
+Only the fresh-workspace init mounts the credential and writes its hash privately. Existing
+administrator credentials are never reset, even when an existing Secret is selected later.
+Retrieve initial credentials through your approved secret-management procedure, not application logs.
+Preserve the Secret along with workspace backups.
+
+AWS Marketplace project installation now requires `awsMarketplace.enabled=true`; instance-metadata
+reachability is not a provider identity check. Existing `AwsMetering` projects are not automatically
+deleted. Review them separately when moving or correcting an existing non-AWS installation.
+
+TimescaleDB accepts `timescaledb.existingSecret` with `existingSecretPasswordKey` and
+`existingSecretBillingPasswordKey`. Baserow accepts `baserow.existingSecret` with
+`existingSecretPasswordKey`; use the same Baserow key for its PostgreSQL initialization. Managed
+credentials come from generated or selected Secrets. These references do not rotate database users
+on an already-initialized PVC. External Redis/TLS overrides still need private handling; no general
+claim is made about every externally supplied option.
+
+CouchDB and TimescaleDB on ReadWriteOnce storage, and Convertigo with one replica on a workspace that is not
+ReadWriteMany, use rolling updates with `maxSurge: 0` and `maxUnavailable: 1`. Required anti-affinity with their own
+pods prevents placement on a node where the old pod is still terminating. A single-node cluster needs no spare
+node: the replacement waits for termination, with planned downtime. On another node, the RWO storage driver's
+attach/detach enforcement remains necessary. This is not storage fencing for an unreachable old node or a driver
+that permits concurrent mounts. A stuck terminating pod, missing hostname labels, insufficient resources or
+conflicting user affinity can leave the replacement Pending; review those conditions rather than weakening the
+constraint. User affinity is preserved. RWX Convertigo deployments keep their existing rolling behavior.
+
+Database volumes explicitly configured with ReadWriteMany retain Recreate, since per-node anti-affinity does not
+serialize writers across different nodes on shared storage. Baserow also keeps Recreate. Switching an existing
+Deployment from RollingUpdate to Recreate can conflict with server-side apply if rollingUpdate fields remain;
+plan that exceptional shared-storage transition separately. Keep tested database backup/rollback procedures.
+
+
+## Installation credentials and upgrades
+
+A fresh installation generates a retained Secret with independent passwords for the Baserow
+administrator, PostgreSQL administrator, billing database, Baserow database, CouchDB and embedded
+Redis. The encryption phrase is never generated; by default the engine keeps its own default and
+no crypto.passphrase property is written. `credentials.existingSecret` selects a managed Secret instead. Individual
+component Secret settings can override their reference; see [installation credentials](../../docs/installation-credentials.md) for
+keys and upgrade behavior. Keep these Secrets with all persistent data; do not regenerate them
+on upgrade, reinstall or restoration. GitOps rendering should always use explicit stable Secrets.
+
+A custom phrase requires `crypto.passphrase` or `crypto.existingSecret` explicitly. A supplied value
+is kept in a separate Secret; an external Secret is only referenced. Custom initialization is also
+gated by `crypto.engineCompatibilityConfirmed`, false by default, until the chosen engine build is
+qualified. The flag alone does not select a custom phrase. Default-phrase installation does not
+require this flag. The prepared chart metadata still targets the published image; a successful render
+is not a qualification of a new passphrase on that engine. Existing workspaces retain their current
+phrase, including the absence of an explicit property. They are never re-encrypted by this chart.
+
+The Baserow init completes database migrations, creates the initial staff account and closes public
+signup before the main HTTP service starts. It never resets an existing account password or promotes
+an unrelated existing user. This account initializer does not run during upgrades.
+Historical values and Secret references remain accepted; no automatic credential migration is performed.
+
+Fresh workspace Context logging defaults to WARN. Project/motor logging improvements and any
+passphrase rotation are separate changes; the chart does not migrate existing encrypted data.
+
+Routine upgrades never generate or rotate credentials or change crypto.passphrase. Legacy component
+environments are preserved through lookup; encrypted workspace files are untouched. Productions
+will be reviewed individually rather than requiring an adoption step before a normal upgrade.
+See `tests/upgrade-credentials.py` for offline server-dry-run regression cases using synthetic data.
+
+## Preparing an 8.4.8 upgrade
+
+Read [the 8.4.8 upgrade notes](../../docs/upgrading-848.md), including the separate approved removal
+of a previously installed AwsMetering project and preservation of existing database images/data.
+Changing nocodestudio.version selects the archive for a new workspace; it does not replace an
+existing C8oForms project or its local adaptations automatically.
+
+The current public default is C8oForms 2.1.23 from GitHub. `nocodestudio.archiveUrl` (default empty)
+can override the complete standalone-bundle URL for a private test build; it does not change the
+required tar layout. Keep private sources only in uncommitted overrides outside the repository.
+Any URL in public chart defaults/examples becomes public. Helm release data and rendered ConfigMaps
+also contain an override, so restrict their access and do not share rendered manifests.
+See [the source contract](../../docs/application-release-contract.md).
+
+A nonempty `nocodestudio.archiveSha256` must contain exactly 64 hexadecimal characters (either
+case); malformed values fail Helm rendering. On a fresh application download the init verifies
+the tar before extraction and stops on mismatch. Empty keeps the previous behavior. It does not
+reimport or revalidate applications in retained installations, nor change their projects or credentials.
+
+The CouchDB uuid becomes stable on the first upgrade using this chart. Unless you explicitly preserve the old
+server uuid in `couchdb.uuid`, that first change can cause FullSync replication checkpoints to be rebuilt once.
+Back up the uuid ConfigMap together with the data volume and retain its value on restore. Offline/GitOps rendering
+must set `couchdb.uuid` explicitly because lookup cannot reuse live state there. Generated self-signed TLS also
+needs live lookup to stay stable; supply a managed TLS Secret for offline/GitOps deployment. Self-signed certificates
+are not publicly trusted and must be replaced or renewed explicitly when hostnames or validity change.

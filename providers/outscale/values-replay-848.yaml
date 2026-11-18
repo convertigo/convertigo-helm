@@ -1,0 +1,57 @@
+# Local 8.4.8 rehearsal overlay. Layer after providers/outscale/values.yaml.
+# Fresh, dedicated workspace/namespace only after approval; not an instruction to upgrade an instance.
+# Public baseline. A private application build is selected only through an uncommitted URL override.
+# This immutable CI baseline was available on 2026-11-17. Select the approved CI build containing
+# the required engine fixes before qualification; see docs/replay-848.md. Do not use hotfix/latest.
+image:
+  repository: convertigo/convertigo-ci
+  tag: "30490-hotfix-8.4.8-beta@sha256:37f176fe043a6bd51b54db0c3b9c01cf45b79cc9b886bbda4f5bc3c80887c3dd"
+  pullPolicy: IfNotPresent
+publicAddr: replay-848.example.com
+replicaCount: 3
+
+# Exercise first-install generation. No account, database credential or phrase belongs in this file.
+credentials:
+  existingSecret: ""
+admin:
+  existingSecret: ""
+crypto:
+  passphrase: ""
+  existingSecret: ""
+  engineCompatibilityConfirmed: false
+
+nocodestudio:
+  enable: true
+  version: "2.1.23"
+  # Never place an embargoed URL in this versioned example.
+  archiveUrl: ""
+awsMarketplace:
+  enabled: false
+
+redis:
+  auth:
+    enabled: true
+    existingSecret: ""
+    existingSecretPasswordKey: redis-password
+baserow:
+  admin:
+    existingSecret: ""
+    allowPublicSignup: false
+  existingSecret: ""
+  existingSecretPasswordKey: baserow-database-password
+  # Existing baseline only; application-owner confirmation is required for the pending release.
+  image:
+    tag: "1.34.5"
+  plugins:
+    c8oforms:
+      enabled: true
+timescaledb:
+  existingSecret: ""
+  existingSecretPasswordKey: postgres-password
+  existingSecretBillingPasswordKey: billing-password
+  image:
+    tag: "2.32.0-pg16"
+couchdb:
+  existingSecret: ""
+  existingSecretUsernameKey: ""
+  existingSecretPasswordKey: couchdb-password

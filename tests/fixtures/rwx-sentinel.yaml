@@ -1,0 +1,41 @@
+# Offline render fixture only. No Secret values and no cluster credentials.
+replicaCount: 3
+publicAddr: demo.example.com
+credentials:
+  existingSecret: fixture-installation
+
+admin:
+  existingSecret: fixture-admin
+workspace:
+  accessModes: [ReadWriteMany]
+  persistentVolume:
+    storageClass: fixture-rwx
+redis:
+  enabled: true
+  sentinel:
+    enabled: true
+    replicas: 3
+  persistence:
+    enabled: true
+    storageClass: fixture-rwo
+  auth:
+    enabled: true
+    existingSecret: fixture-redis
+baserow:
+  existingSecret: fixture-database
+  persistentVolume:
+    storageClass: fixture-rwo
+timescaledb:
+  existingSecret: fixture-database
+  persistentVolume:
+    storageClass: fixture-rwo
+couchdb:
+  existingSecret: fixture-couchdb
+  existingSecretUsernameKey: username
+  existingSecretPasswordKey: password
+  persistentVolume:
+    storageClass: fixture-rwo
+podAnnotations:
+  fixture: retained
+awsMarketplace:
+  enabled: false

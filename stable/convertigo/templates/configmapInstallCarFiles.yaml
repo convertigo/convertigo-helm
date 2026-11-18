@@ -1,32 +1,117 @@
+{{- $archiveSha256 := get .Values.nocodestudio "archiveSha256" -}}
+{{- if or (not (kindIs "string" $archiveSha256)) (and $archiveSha256 (not (regexMatch "^[a-fA-F0-9]{64}$" $archiveSha256))) -}}
+{{- fail "nocodestudio.archiveSha256 must be empty or exactly 64 hexadecimal characters" -}}
+{{- end -}}
+{{- $archiveUrl := default "" .Values.nocodestudio.archiveUrl -}}
+{{- if and $archiveUrl (not (regexMatch "^https://[^[:space:]]+$" $archiveUrl)) -}}
+{{- fail "nocodestudio.archiveUrl must be a complete HTTPS URL without whitespace" -}}
+{{- end -}}
+{{- if and (not (empty .Values.nocodestudio.version)) (not (regexMatch "^[a-zA-Z0-9][a-zA-Z0-9._+-]*$" (toString .Values.nocodestudio.version))) -}}
+{{- fail "nocodestudio.version must be a valid release identifier" -}}
+{{- end -}}
+{{- if and (not (include "convertigo.existingInstallation" .)) .Values.nocodestudio.enable (dig "enabled" true (.Values.projectInstallation | default dict)) (empty .Values.nocodestudio.version) (empty $archiveUrl) -}}
+{{- fail "Select nocodestudio.version or nocodestudio.archiveUrl before starting a new No Code installation" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: c8o-install-car-files
+  name: {{ include "convertigo.fullname" . }}-workspace-setup
 data:
   installCarFiles.sh: |
     #!/bin/bash
-    set -e
-    set -o pipefail
-
-    WORKSPACE="/workspace"
+    set -euo pipefail
+    umask 077
+    WORKSPACE="${WORKSPACE:-/workspace}"
     PROJECTS_DIR="$WORKSPACE/projects"
     CONFIG_DIR="$WORKSPACE/configuration"
-    BASEROW_DIR="$PROJECTS_DIR/BaserowIntegration"
+    PRESERVE_CREDENTIALS="{{ if include "convertigo.existingInstallation" . }}true{{ else }}false{{ end }}"
+    OWNER_UID={{ include "convertigo.runAsUserId" . }}
+    OWNER_GID={{ include "convertigo.runAsGroupId" . }}
     BASEROW_ENABLED="{{ if .Values.baserow.enabled }}true{{ else }}false{{ end }}"
     NOCODESTUDIO_ENABLED="{{ if .Values.nocodestudio.enable }}true{{ else }}false{{ end }}"
-
+    NOCODESTUDIO_ARCHIVE_SHA256={{ $archiveSha256 | lower | quote }}
+    NOCODESTUDIO_VERSION={{ default "" .Values.nocodestudio.version | quote }}
+    # Shell-quote the literal URL; it is neither exported nor passed as a curl argument.
+    NOCODESTUDIO_ARCHIVE_URL={{ $archiveUrl | replace "'" "'\"'\"'" | squote }}
+    INSTALL_ENABLED="{{ dig "enabled" true (.Values.projectInstallation | default dict) }}"
+    METERING_ENABLED="{{ dig "enabled" false (.Values.awsMarketplace | default dict) }}"
+    command -v flock >/dev/null || { echo "Workspace setup requires flock" >&2; exit 1; }
+    if [[ $(id -u) == 0 ]]; then
+      chown "$OWNER_UID:$OWNER_GID" "$WORKSPACE"
+    fi
+    touch "$WORKSPACE/.chart-install.lock"
+    if [[ $(id -u) == 0 ]]; then
+      chown "$OWNER_UID:$OWNER_GID" "$WORKSPACE/.chart-install.lock"
+      chmod 660 "$WORKSPACE/.chart-install.lock"
+    fi
+    exec 9<>"$WORKSPACE/.chart-install.lock"
+    flock -x -w {{ default 900 (.Values.projectInstallation | default dict).lockTimeoutSeconds }} 9
+    # A killed init cannot run its EXIT trap. Remove its staging directories only under the lock;
+    # keep the lock file and never follow a symlink outside the workspace.
+    for abandoned_stage in "$WORKSPACE"/.chart-install.*; do
+      if [[ -d "$abandoned_stage" && ! -L "$abandoned_stage" ]]; then
+        rm -rf -- "$abandoned_stage"
+      fi
+    done
+    # A retained/legacy workspace is not a new credential identity, including after reinstall.
+    if [[ -f "$WORKSPACE/.chart-install-complete" ]] || { [[ ! -f "$CONFIG_DIR/.chart-crypto-state" ]] && { [[ -n "$(ls -A "$CONFIG_DIR" 2>/dev/null)" ]] || [[ -n "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]]; }; }; then
+      PRESERVE_CREDENTIALS=true
+    fi
+    # A new No Code workspace needs a selected release or an explicit archive source. Existing
+    # projects remain untouched; never request an empty or guessed public tag.
+    if [[ "$INSTALL_ENABLED" == true && "$NOCODESTUDIO_ENABLED" == true ]]; then
+      if [[ -z "$NOCODESTUDIO_VERSION" && -z "$NOCODESTUDIO_ARCHIVE_URL" && "$PRESERVE_CREDENTIALS" != true ]]; then
+        echo "Select an application version or archive URL before initializing a new No Code workspace" >&2
+        exit 1
+      fi
+      if [[ -n "$NOCODESTUDIO_VERSION" && ! "$NOCODESTUDIO_VERSION" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ ]]; then
+        echo "nocodestudio.version must be a release tag" >&2
+        exit 1
+      fi
+    fi
+    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
+    STAGE=$(mktemp -d "$WORKSPACE/.chart-install.XXXXXX")
+    trap 'rm -rf -- "$STAGE"' EXIT
+    MARKER="$WORKSPACE/.chart-install-complete"
+    SIGNATURE="v2:nocode=$NOCODESTUDIO_ENABLED:$NOCODESTUDIO_VERSION{{ if $archiveUrl }}:source={{ $archiveUrl | sha256sum }}{{ end }}:install=$INSTALL_ENABLED:metering=$METERING_ENABLED"
+    # Existing projects remain intact. Only complete, staged project directories are published.
+    publish_projects() {
+      local project
+      for project in "$STAGE/projects/"*; do
+        [[ -d "$project" ]] || continue
+        if [[ ! -e "$PROJECTS_DIR/$(basename "$project")" ]]; then
+          mv -- "$project" "$PROJECTS_DIR/"
+        fi
+      done
+    }
+    ADMIN_SECRET_FILE="${ADMIN_SECRET_FILE:-/run/convertigo-admin/password}"
+    export BOOTSTRAP_CUSTOM_PASSPHRASE="{{ if include "convertigo.customPassphrase" . }}true{{ else }}false{{ end }}"
+    export BOOTSTRAP_CRYPTO_COMPATIBLE="{{ if (.Values.crypto | default dict).engineCompatibilityConfirmed }}true{{ else }}false{{ end }}"
+    export WORKSPACE
+    export BOOTSTRAP_COUCH_USER={{ .Values.couchdb.admin | quote }}
+    export BOOTSTRAP_BASEROW_EMAIL={{ default "admin@convertigo.com" (.Values.baserow.admin | default dict).email | quote }}
+    export BOOTSTRAP_REDIS_PASSWORD="{{ if and .Values.redis.enabled .Values.redis.auth.enabled (not .Values.redis.auth.passwordFile) }}true{{ else }}false{{ end }}"
+    CLASSPATH=""
+    for jar in "${CATALINA_HOME:-/usr/local/tomcat}"/webapps/convertigo/WEB-INF/lib/*.jar; do
+      CLASSPATH="${CLASSPATH:+$CLASSPATH:}$jar"
+    done
+    initialize_credentials() {
+      java -Xmx256m --class-path "$CLASSPATH" "${CREDENTIAL_BOOTSTRAP_SOURCE:-/bootstrap/InitializeWorkspace.java}" "$1" > "$STAGE/credential-init.log" 2>&1 || {
+        echo "Workspace credential initialization requires private review" >&2
+        exit 1
+      }
+    }
+    if [[ "$PRESERVE_CREDENTIALS" != true ]]; then initialize_credentials prepare; fi
     # Create global_symbols.properties only if it does not exist
     GLOBAL_SYMBOLS="$CONFIG_DIR/global_symbols.properties"
-    if [[ ! -f "$GLOBAL_SYMBOLS" ]]; then
+    if [[ "$PRESERVE_CREDENTIALS" != true && ! -f "$GLOBAL_SYMBOLS" ]]; then
         echo "No Symbols found, generating Symbols"
         mkdir -p "$CONFIG_DIR"
-        cat > "$GLOBAL_SYMBOLS" << EOF
+        cat > "$STAGE/global_symbols.properties" << EOF
     C8Oforms.baserow.iframe={{ include "convertigo.publicUrl" . }}/convertigo/projects/BaserowIntegration/c8o/
     lib_baserow.https=false
     lib_baserow.port=8000
     lib_baserow.server={{ include "convertigo.fullname" . }}-br
-    lib_baserow.adminuser=admin@convertigo.com
-    lib_baserow.password.secret=x701301a25336f85870cef65c4c7b4b1b56fd1ac5c3496db716f30ea60a29ebea
 
     C8Oforms.EnableProductTour=false
     C8Oforms.hideConvertigoLogin=false
@@ -37,17 +122,14 @@ data:
     C8Oforms.maxThreads=20
 
     C8OBilling.database={{ include "convertigo.fullname" . }}-timescaledb
-    C8OBilling.password.secret=x446e80f253299d272a9a67561864df2a
     C8OBilling.user={{ .Values.timescaledb.billing_user }}
 
-    lib.actions.c8oforms.smtp.password.secret=xd8e180806a1c1d83a6255212121ab827
     lib.actions.c8oforms.smtp.port=587
     lib.actions.c8oforms.smtp.security=Basic
     lib.actions.c8oforms.smtp.sender=Convertigo Forms Builder <noreply@convertigo.com>
     lib.actions.c8oforms.smtp.server=smtp-relay.brevo.com
     lib.actions.c8oforms.smtp.user=
     lib.actions.c8oforms.sql.host=
-    lib.actions.c8oforms.sql.password.secret=xd8e180806a1c1d83a6255212121ab827
     lib.actions.c8oforms.sql.port=
     lib.actions.c8oforms.sql.pwd=
     lib.actions.c8oforms.sql.user=
@@ -59,66 +141,78 @@ data:
     lib_oauth.azuread.clientid=
     lib_oauth.azuread.tenantid=common
     lib_oauth.github.clientid=
-    lib_oauth.github.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.google.clientid=
-    lib_oauth.google.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.linkedin.clientid=
-    lib_oauth.linkedin.keysecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.openid.clientid=
-    lib_oauth.openid.clientsecret.secret=xd8e180806a1c1d83a6255212121ab827
     lib_oauth.openid.instrospect_url=
     lib_producttour.weglot_api_key=
     EOF
+        mv -- "$STAGE/global_symbols.properties" "$GLOBAL_SYMBOLS"
     fi
 
-    if [[ -d "$PROJECTS_DIR" && -d "$CONFIG_DIR" ]]; then
-        if [[ "$BASEROW_ENABLED" == "true" ]]; then
-            if [[ -d "$BASEROW_DIR" ]]; then
-                echo "Installation already exists. Skipping setup."
-                exit 0
-            fi
-        else
-            echo "Installation already exists (Baserow disabled). Skipping setup."
-            exit 0
+
+    if [[ "$INSTALL_ENABLED" == true && "$(cat "$MARKER" 2>/dev/null || true)" != "$SIGNATURE" ]]; then
+      mkdir -p "$STAGE/projects"
+      # A chart update does not authorize importing a new application into a retained workspace.
+      if [[ "$NOCODESTUDIO_ENABLED" == true && "$PRESERVE_CREDENTIALS" != true ]]; then
+        SOURCE_URL="$NOCODESTUDIO_ARCHIVE_URL"
+        if [[ -z "$SOURCE_URL" ]]; then
+          SOURCE_URL="https://github.com/convertigo/C8oForms/releases/download/$NOCODESTUDIO_VERSION/c8oforms_standalone.tar.gz"
         fi
-    fi
-
-    # Ensure required directories exist
-
-    echo "Installing Convertigo projects from GitHub, be sure you have access to the internet"
-    mkdir -p "$PROJECTS_DIR" "$CONFIG_DIR"
-
-    if [[ "$NOCODESTUDIO_ENABLED" == "true" ]]; then
-        curl -L https://github.com/convertigo/C8oForms/releases/download/{{ .Values.nocodestudio.version }}/c8oforms_standalone.tar.gz | \
-            tar xvz --no-same-owner --strip-components=4 -C "$PROJECTS_DIR" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
-    else
-        echo "No Code Studio disabled (nocodestudio.enable=false). Skipping C8oForms installation."
-    fi
-
-    if curl --connect-timeout 1 -s http://169.254.169.254/latest/meta-data/ >/dev/null; then
-        echo "This is an AWS EC2 instance" 
-        DEST_DIR="$PROJECTS_DIR/AwsMetering"
-        TMP_DIR=$(mktemp -d)
-        ZIP_URL="https://github.com/convertigo/c8oprj-aws-metering/archive/refs/heads/master.zip"
-
-        mkdir -p "$DEST_DIR"
-        curl -L "$ZIP_URL" -o "$TMP_DIR/archive.zip"
-        unzip "$TMP_DIR/archive.zip" -d "$TMP_DIR"
-        EXTRACTED_DIR=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d)
-        cp -R "$EXTRACTED_DIR/"* "$DEST_DIR/"
-        rm -rf "$TMP_DIR"
-    fi
-
-    # Root installations hand these files to the Convertigo user. An arbitrary
-    # non-root UID keeps the existing ownership and relies on volume permissions.
-    if [[ $(id -u) == "0" ]]; then
-        if [[ $(stat -c "%U" "$PROJECTS_DIR") != "convertigo" ]]; then
-            chown -R convertigo:convertigo "$PROJECTS_DIR"
+        # A signed private URL must not appear in process arguments or container logs.
+        CURL_URL=${SOURCE_URL//\\/\\\\}
+        CURL_URL=${CURL_URL//\"/\\\"}
+        printf 'url = "%s"\n' "$CURL_URL" > "$STAGE/forms-download.conf"
+        curl --fail --location --retry 3 --config "$STAGE/forms-download.conf" -o "$STAGE/forms.tar.gz" > "$STAGE/forms-download.log" 2>&1 || {
+          echo "Application archive download failed; review its private source configuration" >&2
+          exit 1
+        }
+        unset SOURCE_URL CURL_URL
+        if [[ -n "$NOCODESTUDIO_ARCHIVE_SHA256" ]]; then
+          ARCHIVE_ACTUAL_SHA256=$(sha256sum < "$STAGE/forms.tar.gz")
+          [[ "${ARCHIVE_ACTUAL_SHA256%% *}" == "$NOCODESTUDIO_ARCHIVE_SHA256" ]] || {
+            echo "Application archive SHA-256 verification failed; installation stopped before extraction" >&2
+            exit 1
+          }
         fi
-
-        if [[ $(stat -c "%U" "$CONFIG_DIR") != "convertigo" ]]; then
-            chown -R convertigo:convertigo "$CONFIG_DIR"
-        fi
+        tar xzf "$STAGE/forms.tar.gz" --no-same-owner --strip-components=4 -C "$STAGE/projects" --wildcards 'c8oforms_standalone/data/workspace/projects/*'
+        publish_projects
+      fi
+      if [[ "$METERING_ENABLED" == true && ! -d "$PROJECTS_DIR/AwsMetering" ]]; then
+        curl --fail --location --retry 3 https://github.com/convertigo/c8oprj-aws-metering/archive/refs/heads/master.zip -o "$STAGE/metering.zip"
+        unzip -q "$STAGE/metering.zip" -d "$STAGE/metering"
+        mv -- "$STAGE/metering/c8oprj-aws-metering-master" "$PROJECTS_DIR/AwsMetering"
+      fi
     fi
-
-    echo "Setup completed successfully!"
+    if [[ "$PRESERVE_CREDENTIALS" != true ]]; then
+    # The Secret is visible to this init only. Store the hash, never a JVM option or environment value.
+    test -s "$ADMIN_SECRET_FILE" || { echo "Admin credential file is empty" >&2; exit 1; }
+    ADMIN_HASH=$(sha512sum < "$ADMIN_SECRET_FILE" | cut -d ' ' -f1)
+    PROPERTIES="$CONFIG_DIR/engine.properties"
+    # A newly generated Secret must not replace a previously customized admin account.
+    EXISTING_HASH=$(awk '/^[[:space:]]*admin[.]password[[:space:]]*[=:]/{sub(/^[[:space:]]*admin[.]password[[:space:]]*[=:][[:space:]]*/, ""); print; exit}' "$PROPERTIES" 2>/dev/null || true)
+    DEFAULT_HASH=$(printf admin | sha512sum | cut -d ' ' -f1)
+    FORCE_ADMIN="{{ if (.Values.admin | default dict).existingSecret }}true{{ else }}false{{ end }}"
+    if [[ "$FORCE_ADMIN" == true || -z "$EXISTING_HASH" || "$EXISTING_HASH" == "$DEFAULT_HASH" || "$EXISTING_HASH" == 92668751 ]]; then
+      if [[ -f "$PROPERTIES" ]]; then
+        awk '!/^[[:space:]]*admin[.](username|password)[[:space:]]*[=:]/ && !/^[[:space:]]*anonymous[.]dashboard[[:space:]]*[=:]/' "$PROPERTIES" > "$STAGE/engine.properties"
+      else
+        : > "$STAGE/engine.properties"
+      fi
+      printf '\nadmin.username=%s\nadmin.password=%s\nanonymous.dashboard=false\n' '{{ default "admin" (.Values.admin | default dict).username }}' "$ADMIN_HASH" >> "$STAGE/engine.properties"
+      chmod 600 "$STAGE/engine.properties"
+      mv -- "$STAGE/engine.properties" "$PROPERTIES"
+    fi
+    chmod 600 "$PROPERTIES"
+    unset EXISTING_HASH DEFAULT_HASH
+    unset ADMIN_HASH
+    initialize_credentials symbols
+    fi
+    # Always repair legacy/interrupted root-owned files, even when projects already exist.
+    if [[ $(id -u) == 0 ]]; then
+      find "$PROJECTS_DIR" "$CONFIG_DIR" -xdev \( ! -uid "$OWNER_UID" -o ! -gid "$OWNER_GID" \) -exec chown -h "$OWNER_UID:$OWNER_GID" {} +
+    fi
+    printf '%s\n' "$SIGNATURE" > "$STAGE/complete"
+    if [[ $(id -u) == 0 ]]; then chown "$OWNER_UID:$OWNER_GID" "$STAGE/complete"; fi
+    mv -- "$STAGE/complete" "$MARKER"
+    echo "Workspace setup completed"

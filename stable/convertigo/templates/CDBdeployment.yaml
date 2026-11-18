@@ -1,4 +1,5 @@
 {{- if .Values.couchdb.enabled }}
+{{- $sharedData := has "ReadWriteMany" (default (list "ReadWriteOnce") .Values.couchdb.accessModes) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,19 +7,29 @@ metadata:
   labels:
     {{- include "convertigo.labels" . | nindent 4 }}-cdb
 spec:
+  strategy:
+    {{- if $sharedData }}
+    type: Recreate
+    {{- else }}
+    {{- include "convertigo.singlePodStrategy" . | nindent 4 }}
+    {{- end }}
   replicas: 1
   selector:
     matchLabels:
       {{- include "convertigo.selectorLabels" . | nindent 6 }}-cdb
   template:
     metadata:
-      {{- with .Values.podAnnotations }}-cdb
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}-cdb
     spec:
+      {{- if not $sharedData }}
+      affinity:
+        {{- include "convertigo.singlePodAffinity" (dict "labels" (printf "%s-cdb" (include "convertigo.selectorLabels" .))) | nindent 8 }}
+      {{- end }}
       serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
       volumes: 
         - name : cdb-data
@@ -26,7 +37,10 @@ spec:
             claimName: {{ include "convertigo.fullname" . }}-cdb-workspace
       containers:
         - name: {{ .Chart.Name }}-cdb
-          command: ["/bin/sh", "-c", "echo '[couchdb]\nsingle_node=true' > /opt/couchdb/etc/local.d/setup.ini && /docker-entrypoint.sh couchdb"]
+          # exec hands PID 1 to tini, the image's own init: SIGTERM reaches CouchDB, which stops cleanly instead of
+          # being killed at the end of the grace period, and tini reaps the processes CouchDB spawns.
+          # setup.ini also fixes the server uuid (convertigo.couchdbUuid).
+          command: ["/bin/sh", "-c", "printf '[couchdb]\nsingle_node=true\nuuid = %s\n' \"$C8O_COUCHDB_UUID\" > /opt/couchdb/etc/local.d/setup.ini && exec tini -- /docker-entrypoint.sh /opt/couchdb/bin/couchdb"]
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: {{ .Values.couchdb.image.repository }}:{{ .Values.couchdb.image.tag }}
@@ -34,10 +48,7 @@ spec:
             - name: cdb-data
               mountPath: /opt/couchdb/data
           env:
-            - name: COUCHDB_USER
-              value: {{ include "convertigo.couchdbUsername" . | quote }}
-            - name: COUCHDB_PASSWORD
-              value: {{ include "convertigo.couchdbPassword" . | quote }}
+            {{- include "convertigo.componentEnvironment" (list . "-cdb" (include "convertigo.defaultEnvironment_cdb" .) (list "COUCHDB_USER" "COUCHDB_PASSWORD")) | nindent 12 }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

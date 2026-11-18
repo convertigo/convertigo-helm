@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Opt-in Docker upgrade test; keeps test data, stops all containers it creates.
 
-Pull baserow/baserow:{1.30.1,1.34.5} and timescale/timescaledb:latest-pg16
+Pull baserow/baserow:{1.30.1,1.34.5} and timescale/timescaledb:2.32.0-pg16
 first. Run from the repository root. No Kubernetes or external credentials needed.
 Plugin installation and all API checks run on an internal Docker network.
 """
@@ -16,6 +16,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,12 +148,14 @@ directory.mkdir(parents=True, exist_ok=options.resume_empty_baseline)
 for name in ['postgres', 'data', 'archive', 'plugins']:
     (directory / name).mkdir(exist_ok=options.resume_empty_baseline)
 rendered = run('helm', 'template', 'validation', str(ROOT / 'stable/convertigo'),
-               '--set', 'baserow.plugins.c8oforms.enabled=true')
+               '--set', 'baserow.plugins.c8oforms.enabled=true', '--set', 'nocodestudio.enable=false')
 deployment = next(d for d in rendered.split('\n---\n')
                   if '# Source: convertigo/templates/BRdeployment.yaml' in d)
-command = json.loads(re.search(r'^          command: (.+)$', deployment, re.M)[1])[2]
-plugin_url = re.search(r'name: BASEROW_PLUGIN_URLS\s+value: "([^"]+)"', deployment)[1]
-assert 'name: PIP_NO_BUILD_ISOLATION\n              value: "false"' in deployment
+container = yaml.safe_load(deployment)['spec']['template']['spec']['containers'][0]
+command = container['command'][2]
+environment = {e['name']: e for e in container['env']}
+plugin_url = environment['BASEROW_PLUGIN_URLS']['value']
+assert environment['PIP_NO_BUILD_ISOLATION']['value'] == 'false'
 cm = next(d for d in rendered.split('\n---\n')
           if '# Source: convertigo/templates/BRconfigmapC8oforms.yaml' in d)
 archive, encoded = re.search(r'^  (c8oforms-\S+\.tar\.gz): (\S+)$', cm, re.M).groups()
@@ -177,7 +180,7 @@ try:
             '-e', 'POSTGRES_USER=baserow', '-e', 'POSTGRES_DB=baserow',
             '-e', 'POSTGRES_PASSWORD=' + PASSWORD,
             '--mount', 'type=bind,src=%s,dst=/var/lib/postgresql/data' % (directory / 'postgres'),
-            'timescale/timescaledb:latest-pg16', 'postgres', '-c', 'shared_buffers=32MB',
+            'timescale/timescaledb:2.32.0-pg16', 'postgres', '-c', 'shared_buffers=32MB',
             '-c', 'max_connections=50')
         created.append(db)
         for attempt in range(60):

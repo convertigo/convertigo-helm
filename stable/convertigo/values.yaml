@@ -8,7 +8,7 @@ replicaCount: 1
 
 # Seconds a rollout can wait for new pods to become ready before Kubernetes reports it as failed
 # (Kubernetes default: 600). Raise it when a new pod may wait long for Redis (network convergence).
-progressDeadlineSeconds: ""
+progressDeadlineSeconds: 1800
 
 rootRedirect: /convertigo/
 
@@ -25,7 +25,51 @@ image:
 # ====== Convertigo NoCode Studio ==============
 nocodestudio:
     enable: true
-    version: "2.1.14"
+    version: "2.1.23"
+    # Optional complete HTTPS URL of a compatible standalone tar bundle. Empty keeps public GitHub.
+    # Private test URLs belong only in uncommitted overrides, never public chart defaults.
+    archiveUrl: ""
+    # Optional SHA-256 of the downloaded tar, checked before extraction.
+    archiveSha256: ""
+
+# The generated credential is kept across upgrades. Prefer an existing Secret in production.
+admin:
+  username: admin
+  existingSecret: ""
+  passwordKey: password
+
+# Fresh installations generate stable credentials. Upgrades retain existing Secrets/values and
+# never initialize or rotate an existing account, password or passphrase.
+credentials:
+  existingSecret: ""
+  adoptExisting: false # Deprecated compatibility field; upgrades never require or apply adoption.
+crypto:
+  # Empty by default: use the engine default, without writing crypto.passphrase.
+  # A custom phrase is opt-in through this value OR an explicit Secret. Prefer a Secret in production.
+  passphrase: ""
+  # Applies only to an explicitly selected custom phrase and a qualified engine build.
+  engineCompatibilityConfirmed: false
+  existingSecret: ""
+  passphraseKey: crypto-passphrase
+
+# Installation completes before Tomcat starts. The workspace driver must support flock across nodes.
+projectInstallation:
+  enabled: true
+  lockTimeoutSeconds: 900
+  resources: {}
+
+# Explicit opt-in; metadata endpoints are also implemented by other cloud providers.
+awsMarketplace:
+  enabled: false
+
+# Gates liveness/readiness while the engine loads or migrates projects (up to 10 minutes).
+startupProbe:
+  enabled: true
+  exec:
+    command: ["sh", "-c", "s=$(curl -fsS --max-time 5 http://127.0.0.1:28080/convertigo/admin/services/engine.Supervision) && echo \"$s\" | grep -q 'convertigo.started=OK' && ! echo \"$s\" | grep -q 'convertigo.projects=KO'"]
+  periodSeconds: 10
+  timeoutSeconds: 6
+  failureThreshold: 60
 
 imagePullSecrets: []
 nameOverride: ""
@@ -57,11 +101,9 @@ serviceAccount:
 
 podAnnotations: {}
 
-# Root init container that prepares the ownership of /workspace. Keep enabled for
-# compatibility; disable when the volume is already writable by the runtime UID,
-# or when the storage driver supports permission management with fsGroup.
-# Restricted clusters must disable it and configure non-root security contexts.
-# This switch only controls the built-in init container, not extraInitContainers.
+# The workspace init runs as root and repairs project/configuration ownership under its lock.
+# Disable on pre-owned/root-squashed volumes: it then runs as the runtime UID/GID.
+# No permission widening is performed; the storage driver must allow writes by that identity.
 workspaceOwnershipInit:
   enabled: true
 
@@ -110,6 +152,52 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: 500m
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+# ====== Gateway API (alternative to the Ingress) ==============================================================
+# For clusters with a Gateway API controller (Envoy Gateway, Istio, Cilium, NGINX Gateway Fabric...).
+# Never together with the Ingress: set ingress.enabled=false. The HTTPRoute redirects / to rootRedirect, sends
+# /convertigo to Convertigo and the rest to Baserow (No Code Studio data).
+gateway:
+  enabled: false
+  # Attach the routes to an existing Gateway, for example:
+  # parentRefs:
+  #   - name: shared-gateway
+  #     namespace: gateway-system
+  #     sectionName: https
+  parentRefs: []
+  # Or let the chart create its own Gateway, with HTTP and HTTPS listeners, for this GatewayClass
+  # (eg for Envoy Gateway). Its HTTPS listener uses the tls.secretName certificate.
+  gatewayClassName: ""
+  # Annotations of the created Gateway, for example cert-manager.io/cluster-issuer: letsencrypt-prod
+  # (cert-manager with Gateway API support enabled, and a DNS name in publicAddr).
+  annotations: {}
+  # spec.infrastructure of the created Gateway: labels and annotations of its load balancer, or parametersRef.
+  infrastructure: {}
+  # Redirect HTTP to HTTPS on the created Gateway.
+  httpsRedirect: true
+  # Host names of the routes. Empty: publicAddr, or any host when publicAddr is localhost or an IP address.
+  hostnames: []
+  # When false, / is not redirected to rootRedirect.
+  rootRedirectEnabled: true
+  # Timeouts of the Convertigo and Baserow routes, as the Ingress proxy timeouts.
+  timeouts:
+    request: 3600s
+    backendRequest: 3600s
+  # Several Convertigo replicas with Tomcat sessions need sticky sessions, for example
+  # {type: Cookie, sessionName: route} (Gateway API experimental channel). Redis sessions do not.
+  sessionPersistence: {}
+
+# ====== TLS certificate ======================================================================================
+tls:
+  # Secret (kubernetes.io/tls) used by the Ingress and by the Gateway created by the chart.
+  secretName: convertigo-tls
+  # Self-signed certificate for publicAddr generated by the chart in that Secret, kept across upgrades:
+  #   auto: only for the Gateway created by the chart; true: also for the Ingress; false: never.
+  # Never generated when a cert-manager issuer annotation is set, nor over a Secret of that name created
+  # outside this release (your own certificate).
+  selfSigned: auto
+  # Validity of a generated certificate, in days.
+  selfSignedDays: 3650
 
 resources:
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -234,7 +322,7 @@ redis:
     port: 6379
   auth:
     enabled: true
-    password: ChangeMe!
+    password: "" # New install: generated/provided; upgrade: keep the established value or Secret
     # Existing secret holding the password, used instead of password.
     existingSecret: ""
     existingSecretPasswordKey: redis-password
@@ -346,15 +434,18 @@ livenessProbe:
 
 # ====== timescaledb ========== This will be used to hold NoCode database and metrics data usage is mandatory ====
 timescaledb:
+  existingSecret: ""
+  existingSecretPasswordKey: postgres-password
+  existingSecretBillingPasswordKey: billing-password
   enabled: true
   image:
     repository: timescale/timescaledb
-    tag: latest-pg16
+    tag: 2.32.0-pg16
   user: postgres
-  password: ChangeMe!
+  password: "" # New install: generated/provided; upgrade: keep the established value or Secret
   billing_database: c8oAnalytics
   billing_user: c8oAnalytics
-  billing_password: c8oAnalytics
+  billing_password: "" # New install: generated/provided; upgrade: keep the established value or Secret
   br_user: 
   persistentVolume:
     # adapt the storage class to your environment
@@ -372,6 +463,14 @@ timescaledb:
 
 # ====== Baserow ========== This is The No Code database used by Convertigo, =======================================
 baserow:
+  admin:
+    email: admin@convertigo.com
+    name: Platform administrator
+    existingSecret: ""
+    passwordKey: baserow-admin-password
+    allowPublicSignup: false
+  existingSecret: ""
+  existingSecretPasswordKey: baserow-database-password
   enabled: true
   image:
     repository: baserow/baserow
@@ -380,7 +479,7 @@ baserow:
     tag: 1.34.5
   baserow_db : baserow
   baserow_user: baserow
-  baserow_password: N0Passworw0rd
+  baserow_password: "" # New install: generated/provided; upgrade: keep the established value or Secret
   baserow_public_url: ""
   plugins:
     # C8oForms plugin of Baserow (backend only): whole-table SQL aggregations under /api/c8o/ for No Code Studio,
@@ -413,13 +512,18 @@ couchdb:
   existingSecret: ""
   existingSecretNamespace: ""
   existingSecretUsernameKey: ""
-  existingSecretPasswordKey: ""
+  existingSecretPasswordKey: couchdb-password
   existingSecretOptional: false
   image:
     repository: couchdb
     tag: "3.5"
   admin: admin
-  password: fullsyncpassword
+  password: "" # New install: generated/provided; upgrade: keep the established value or Secret
+  # Server uuid, kept across restarts: FullSync clients (PouchDB) derive their replication id from the uuid
+  # returned by /convertigo/fullsync/, and lose their checkpoints when it changes. Empty: generated once, then kept
+  # in the ConfigMap <release>-cdb-uuid. Set it (32 lowercase hexadecimal characters) when the chart is rendered
+  # without cluster access (helm template, GitOps).
+  uuid: ""
   persistentVolume:
     # adapt the storage class to your environment
     storageClass: ebs-sc

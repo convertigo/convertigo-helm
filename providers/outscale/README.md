@@ -1,115 +1,117 @@
-# Convertigo on OKS with a shared NFS workspace
+# Convertigo on OUTSCALE OKS
 
-This guide installs Convertigo on OUTSCALE OKS with a shared workspace backed by NFS. Shared Workspace is
-Needed if you want more than 1 Convertigo replica running.
-It assumes you have a working OKS cluster and `kubectl` access.
+Use a namespace dedicated to the installation. Run commands through a context wrapper belonging
+only to that environment. This guide does not select or change a kubectl context, install a controller,
+or create an NFS server. The historical `nfs-deployment.yaml` is a legacy example, not the recommended
+RWX setup and not a highly available storage service.
 
-## 0) Prerequisites
+## Prerequisites
 
-- `kubectl` configured to reach the OKS cluster
-- `helm` installed
-- A namespace for Convertigo (example: `convertigo`)
-- A namespace for NFS (example: `nfs`)
+- An existing Envoy Gateway (Gateway API v1 CRDs) with an HTTPS listener and a certificate.
+- A tested RWX storage class for the shared workspace. `values.yaml` uses Longhorn as an example;
+  verify its NFS advisory-lock support across nodes and its failure/recovery behavior first.
+- RWO storage for PostgreSQL/TimescaleDB, CouchDB, Baserow and Redis. The example explicitly sets
+  all five storage-class values; `ebs-sc` is not assumed to exist on OKS. Do not change the class
+  of an existing PVC during an upgrade: provision/migrate data in a separate operation.
+- Secret objects in the installation namespace, supplied through your secret manager:
+  `platform-admin` (`password`), `platform-redis` (`redis-password`), `platform-couchdb`
+  (`username`, `password`), and `platform-database` (`postgres-password`, `billing-password`,
+  `baserow-password`). Password file bytes must not include an unintended trailing newline.
+  Also provide `platform-installation` (`baserow-admin-password`).
+  These are example names, not pre-existing credentials. The engine default phrase is retained;
+  no phrase is generated. A custom phrase requires `crypto.passphrase` or `crypto.existingSecret`
+  explicitly and a qualified engine with `crypto.engineCompatibilityConfirmed=true`. This example
+  does not opt in to a custom phrase.
 
-```bash
-kubectl create namespace convertigo
-kubectl create namespace nfs
-```
+Render and lint locally before any installation, using `values.yaml`. Replace the example hostname,
+classes and Secret names. The local candidate metadata is 8.4.8; publication remains a separate decision. There is no implicit dependency on AWS instance metadata: AWS Marketplace
+project installation is opt-in. On a previously initialized workspace, separately review/remove an
+already-installed `AwsMetering` project; the chart preserves existing projects and does not delete it.
 
-## 1) Install the NFS server (userspace NFS‑Ganesha) for Multi Pod replica shared Worskpace
+## Startup and workspace installation
 
-Apply the NFS deployment (RBAC + Service + Deployment) from `nfs-deployment.yaml`:
+The `workspace-setup` init container serializes installation with an advisory lock on the RWX volume.
+It downloads/extracts into staging, publishes only complete missing project directories, repairs
+ownership and writes a completion marker last. Existing projects and their local changes are kept.
+An interrupted legacy project that is itself incomplete requires operator inspection; a chart upgrade
+must not silently overwrite it. Existing BaserowIntegration directories do not skip permission repair.
 
-```bash
-kubectl apply -f nfs-deployment.yaml
-```
+By default this init runs as root and the engine keeps its normal runtime identity. On a root-squashed
+or restricted volume, pre-provision ownership and set `workspaceOwnershipInit.enabled=false`; the init
+then runs with the runtime UID/GID and cannot repair files owned by somebody else. Confirm this mode
+on your storage, not by broadening permissions. Other init containers run after workspace setup.
 
-Verify the NFS pod is running:
+The startup probe gates liveness/readiness while projects load or migrate, for up to 10 minutes after
+Tomcat starts. Download/install time belongs to the init phase and is not charged to that probe.
+The default deployment progress deadline is 30 minutes. An init lock timeout or permission error is
+reported as a failed init, rather than starting an engine on a partially prepared workspace.
 
-```bash
-kubectl -n nfs get pods -o wide
-```
+## Route through an existing Gateway
 
-## 2) Create the NFS‑backed PV/PVC for Convertigo
+A chart-native Gateway feature is not introduced in this patch. Attach the following HTTPRoute to an
+existing Gateway, after substituting the release/namespace, gateway name and permitted listener.
+The Gateway owner must allow a route from this namespace. The controller and its TLS Secret remain
+separate infrastructure. For the example release `demo`, the chart backend names are shown below.
 
-Create a static PV + PVC pointing at the NFS service IP and `/export` path:
-
-```bash
-cat <<'YAML' | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolume
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
-  name: nfs-pv
+  name: demo
+  namespace: demo
 spec:
-  accessModes:
-  - ReadWriteMany
-  capacity:
-    storage: 5Gi
-  mountOptions:
-  - vers=4
-  nfs:
-    path: /export
-    server: 10.92.20.183
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  volumeMode: Filesystem
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: convertigo-c8o-workspace
-  namespace: convertigo
-  annotations:
-    helm.sh/resource-policy: keep
-    meta.helm.sh/release-name: convertigo
-    meta.helm.sh/release-namespace: convertigo
-  labels:
-    app.kubernetes.io/managed-by: Helm
-spec:
-  accessModes:
-  - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: ""
-  volumeMode: Filesystem
-  volumeName: nfs-pv
-YAML
+  parentRefs:
+    - name: public-gateway
+      namespace: gateway-system
+      sectionName: https
+  hostnames: [demo.example.com]
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /convertigo}
+      backendRefs:
+        - name: demo-convertigo
+          port: 28080
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      backendRefs:
+        - name: demo-convertigo-br
+          port: 80
 ```
 
-Notes:
-- The `server` IP is the NFS service ClusterIP from `nfs-deployment.yaml`.
-- If you change the NFS service IP or name, update `server` accordingly.
+With Redis session storage, do not rely on sticky routing to demonstrate failover. Validate
+cross-pod reads with an authenticated session and serializable data before any disruption. See
+`docs/session-failover-test.md`. Successful TCP promotion alone is not proof of session persistence.
 
-## 3) Install Convertigo with Helm
+A load balancer operating in VIP mode without PROXY protocol may hide the client address.
+Forwarding headers cannot reconstruct an address the load balancer never supplied. Choose the
+supported LBU/Gateway forwarding mode with the network owner, trust headers only from the expected
+upstream and verify it with a request from a known external address. This is not fixed by a chart
+annotation or by accepting arbitrary incoming X-Forwarded-For headers.
 
-Add the Convertigo Helm repo and install:
+## Upgrade and rollback
 
-```bash
-helm repo add convertigo https://convertigo-helm-charts.s3.eu-west-3.amazonaws.com
-helm repo update
+Preserve the workspace, database backups and previous values before the approved upgrade. Check
+that old pods are no longer installing projects before replacing the legacy installer. Validate a
+cold RWX start, permission repair and interruption/retry on an isolated environment first. Do not
+run a failover or kill production pods merely to validate this guide. Revert to the previous chart
+and values if required; do not restore or delete persistent data automatically. Reverting a chart
+does not undo database/project migrations or a credential change: plan those steps separately.
 
-helm upgrade --install convertigo convertigo/convertigo \
-  -n convertigo \
-  --create-namespace \
-  -f values.yaml
-```
 
-## 4) Verify
+Before upgrading an older installation, follow `../../docs/installation-credentials.md`. Normal
+upgrades retain established Secrets and values, do not require adoption, and never initialize
+accounts or change the effective passphrase. Review any later production credential migration
+individually. Never generate replacement passwords for existing PVCs during a routine upgrade.
 
-```bash
-kubectl -n convertigo get deployments
-kubectl -n convertigo get pods -o wide
-```
+## Local 8.4.8 rehearsal
 
-All deployments should show `READY 1/1`.
-
-## Troubleshooting
-
-- Convertigo init fails with `Read-only file system`:
-  - Ensure PV uses `path: /export` and NFS export is RW.
-- Convertigo pods stuck in `Init:0/1`:
-  - Check NFS server pod logs: `kubectl -n nfs logs deploy/nfs-server`.
-- NFS mount issues:
-  - Confirm NFS service IP: `kubectl -n nfs get svc nfs-server -o jsonpath='{.spec.clusterIP}'`.
-  - Ensure PV `server` matches the service IP.
+Layer `values-replay-848.yaml` after this provider's `values.yaml` for a new isolated rehearsal,
+not for an existing installation. It selects a pinned CI beta image and generated first-install
+credentials, retaining the default engine phrase. Replace the provisional baseline with the approved
+CI build and use a private archiveUrl override for a nonpublic RC after backend confirmation.
+Never commit this URL or publish it in chart defaults. Use
+`values-replay-848-fallback.yaml` explicitly if explicitly choosing the authorized fresh
+rehearsal must use beta349.1. Do not downgrade an existing RC workspace. See [the rehearsal kit](../../docs/replay-848.md) and
+[the upgrade notes](../../docs/upgrading-848.md) for version/data constraints and the separate
+approved removal of an erroneously installed AwsMetering project. No cluster action is authorized
+by these example files.

@@ -2,8 +2,8 @@
 """Render checks of single-pod Deployments on ReadWriteOnce volumes; no cluster access.
 
 CouchDB, TimescaleDB and a lone Convertigo on a ReadWriteOnce workspace use RollingUpdate with maxSurge 0 and a
-required anti-affinity with their own pods per node: the new pod starts only once the old one has ended, as with
-Recreate, and upgrades from rolling Deployments also work with server-side apply (Helm 4). Baserow stays Recreate.
+required anti-affinity with their own pods per node. RWO volume attachment still serializes access across nodes.
+Upgrades from rolling Deployments work with server-side apply (Helm 4). Baserow and RWX databases keep Recreate.
 """
 import io
 import json
@@ -72,6 +72,13 @@ assert single_pod(merged) and affinity(merged)['nodeAffinity'] == user['nodeAffi
 assert affinity(merged)['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0] == user['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0]
 assert affinity(deployments('--set-json', 'affinity=' + json.dumps(user), *RWX)['convertigo']) == user
 print('PASS shared workspaces unchanged, user affinity merged', flush=True)
+# A DB explicitly using RWX cannot rely on RWO attachment fencing across nodes.
+# Keep the previous Recreate behavior instead of permitting two writers on a shared volume.
+for component,name in [('couchdb','cdb'),('timescaledb','timescale')]:
+    shared=deployments('--set-json',component+'.accessModes=["ReadWriteMany"]')[name]
+    assert strategy(shared)==RECREATE and affinity(shared) is None
+print('PASS shared database volumes retain Recreate', flush=True)
+
 
 # 4. Nothing else changes from BASE.
 with tempfile.TemporaryDirectory(prefix='rollout-strategy-') as tmp:

@@ -1,4 +1,5 @@
 {{- if .Values.timescaledb.enabled }}
+{{- $sharedData := has "ReadWriteMany" (default (list "ReadWriteOnce") .Values.timescaledb.accessModes) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,7 +8,11 @@ metadata:
     {{- include "convertigo.labels" . | nindent 4 }}-timescaledb
 spec:
   strategy:
+    {{- if $sharedData }}
+    type: Recreate
+    {{- else }}
     {{- include "convertigo.singlePodStrategy" . | nindent 4 }}
+    {{- end }}
   replicas: 1
   selector:
     matchLabels:
@@ -21,8 +26,10 @@ spec:
       labels:
         {{- include "convertigo.selectorLabels" . | nindent 8 }}-timescaledb
     spec:
+      {{- if not $sharedData }}
       affinity:
         {{- include "convertigo.singlePodAffinity" (dict "labels" (printf "%s-timescaledb" (include "convertigo.selectorLabels" .))) | nindent 8 }}
+      {{- end }}
       serviceAccountName: {{ include "convertigo.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}

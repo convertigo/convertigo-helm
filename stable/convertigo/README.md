@@ -596,6 +596,7 @@ The Java options suppress detailed errors in client responses while keeping them
 
 The Gateway API can replace the ingress (`ingress.enabled=false`, `gateway.enabled=true`). The chart then
 creates an HTTPRoute that redirects `/` to `rootRedirect`, sends `/convertigo` to Convertigo and the rest to Baserow.
+Install compatible Gateway API CRDs and a controller separately; the chart does not install either.
 
 Attach it to a Gateway managed by your platform team:
 
@@ -816,12 +817,19 @@ credentials come from generated or selected Secrets. These references do not rot
 on an already-initialized PVC. External Redis/TLS overrides still need private handling; no general
 claim is made about every externally supplied option.
 
-CouchDB and TimescaleDB, and Convertigo with one replica on a workspace that is not ReadWriteMany, stop their old
-pod before starting the new one: rolling updates with `maxSurge: 0`, and a required anti-affinity with their own
-pods that keeps the new pod off a node where the old one is still terminating. Two processes never share the same
-data, and a new pod no longer waits forever for a volume still attached to another node. This behaves as Recreate,
-which these Deployments cannot switch to on upgrade with server-side apply (Helm 4). It introduces a planned outage;
-retain a tested database backup/rollback procedure. Baserow keeps Recreate.
+CouchDB and TimescaleDB on ReadWriteOnce storage, and Convertigo with one replica on a workspace that is not
+ReadWriteMany, use rolling updates with `maxSurge: 0` and `maxUnavailable: 1`. Required anti-affinity with their own
+pods prevents placement on a node where the old pod is still terminating. A single-node cluster needs no spare
+node: the replacement waits for termination, with planned downtime. On another node, the RWO storage driver's
+attach/detach enforcement remains necessary. This is not storage fencing for an unreachable old node or a driver
+that permits concurrent mounts. A stuck terminating pod, missing hostname labels, insufficient resources or
+conflicting user affinity can leave the replacement Pending; review those conditions rather than weakening the
+constraint. User affinity is preserved. RWX Convertigo deployments keep their existing rolling behavior.
+
+Database volumes explicitly configured with ReadWriteMany retain Recreate, since per-node anti-affinity does not
+serialize writers across different nodes on shared storage. Baserow also keeps Recreate. Switching an existing
+Deployment from RollingUpdate to Recreate can conflict with server-side apply if rollingUpdate fields remain;
+plan that exceptional shared-storage transition separately. Keep tested database backup/rollback procedures.
 
 
 ## Installation credentials and upgrades
@@ -873,3 +881,10 @@ A nonempty `nocodestudio.archiveSha256` must contain exactly 64 hexadecimal char
 case); malformed values fail Helm rendering. On a fresh application download the init verifies
 the tar before extraction and stops on mismatch. Empty keeps the previous behavior. It does not
 reimport or revalidate applications in retained installations, nor change their projects or credentials.
+
+The CouchDB uuid becomes stable on the first upgrade using this chart. Unless you explicitly preserve the old
+server uuid in `couchdb.uuid`, that first change can cause FullSync replication checkpoints to be rebuilt once.
+Back up the uuid ConfigMap together with the data volume and retain its value on restore. Offline/GitOps rendering
+must set `couchdb.uuid` explicitly because lookup cannot reuse live state there. Generated self-signed TLS also
+needs live lookup to stay stable; supply a managed TLS Secret for offline/GitOps deployment. Self-signed certificates
+are not publicly trusted and must be replaced or renewed explicitly when hostnames or validity change.

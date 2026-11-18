@@ -94,5 +94,9 @@ with tempfile.TemporaryDirectory(prefix='rollout-strategy-') as tmp:
         for d in [new['cdb'], old['cdb']]:  # Covered by tests/couchdb-shutdown.py.
             for key in ['command', 'env']:
                 d['spec']['template']['spec']['containers'][0].pop(key, None)
+        # The interrupted-staging cleanup intentionally changes the installer checksum;
+        # its behavior is covered by startup-installation.py, not this rollout comparison.
+        for d in [new['convertigo'], old['convertigo']]:
+            d['spec']['template']['metadata']['annotations'].pop('checksum/workspace-installer', None)
         assert new == old, case
 print('PASS rest of the Deployments unchanged', flush=True)

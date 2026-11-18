@@ -6,6 +6,7 @@ this tests process serialization, not a remote RWX driver's cross-node locking b
 The credential CLI is mocked here; installation-credentials.py covers the real Java initializer.
 """
 import base64
+import fcntl
 import hashlib
 import io
 import os
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import yaml
 
 CHART = Path(__file__).resolve().parents[1] / 'stable/convertigo'
@@ -109,6 +111,8 @@ with tempfile.TemporaryDirectory(prefix='chart-startup-fixture-') as directory:
     tool('java', 'import sys,os,pathlib\nif sys.argv[-1]=="prepare":\n p=pathlib.Path(os.environ["WORKSPACE"])/"configuration/.chart-crypto-state";p.parent.mkdir(parents=True,exist_ok=True);p.write_text("mode=new\\n")\nsys.exit(0)\n')
     tool('flock', '''import fcntl,os,sys,time
 fd=int(sys.argv[-1]); deadline=time.monotonic()+float(sys.argv[sys.argv.index('-w')+1])
+if os.environ.get('LOCK_WAIT_MARKER'):
+ open(os.environ['LOCK_WAIT_MARKER'],'w').close()
 while True:
  try: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB); break
  except BlockingIOError:
@@ -186,6 +190,29 @@ print(hashlib.sha512(sys.stdin.buffer.read()).hexdigest()+'  -')
     run(env(retained,pending_count))
     assert retained_properties.read_text()=='fixture=keep\n' and not pending_count.exists()
     script.write_text(installer(default))
+    # An interrupted init leaves staging behind. A second init must not touch it before
+    # acquiring the same lock; files and symlinks matching the prefix are not staging.
+    cleanup=root/'cleanup';cleanup.mkdir();stale=cleanup/'.chart-install.aborted';stale.mkdir()
+    (stale/'partial.tar.gz').write_bytes(b'incomplete')
+    outside=root/'outside-staging';outside.mkdir();(outside/'keep').write_text('keep')
+    link=cleanup/'.chart-install.link';link.symlink_to(outside,target_is_directory=True)
+    ordinary=cleanup/'.chart-install.note';ordinary.write_text('keep')
+    wait_marker=root/'lock-waiting';cleanup_count=root/'cleanup-count'
+    with (cleanup/'.chart-install.lock').open('a+') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX)
+        lock_inode=os.fstat(lock.fileno()).st_ino
+        job=subprocess.Popen(['bash',str(script)],env=env(cleanup,cleanup_count,LOCK_WAIT_MARKER=str(wait_marker)),
+                             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            deadline=time.monotonic()+5
+            while not wait_marker.exists() and time.monotonic()<deadline:time.sleep(.02)
+            assert wait_marker.exists() and stale.exists() and not cleanup_count.exists()
+        finally:fcntl.flock(lock,fcntl.LOCK_UN)
+        assert job.wait(timeout=30)==0
+        assert (cleanup/'.chart-install.lock').stat().st_ino==lock_inode
+    assert not stale.exists() and link.is_symlink() and (outside/'keep').read_text()=='keep'
+    assert ordinary.read_text()=='keep' and (cleanup/'.chart-install-complete').exists()
+    print('PASS abandoned staging cleaned only after lock acquisition, lock inode/files/symlinks preserved')
     workspace = root / 'workspace'; workspace.mkdir(); count = root / 'count'
     run(env(workspace, count, FAIL_DOWNLOAD='1'), fail=True)
     assert not (workspace / '.chart-install-complete').exists()

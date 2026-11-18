@@ -46,6 +46,13 @@ data:
     fi
     exec 9<>"$WORKSPACE/.chart-install.lock"
     flock -x -w {{ default 900 (.Values.projectInstallation | default dict).lockTimeoutSeconds }} 9
+    # A killed init cannot run its EXIT trap. Remove its staging directories only under the lock;
+    # keep the lock file and never follow a symlink outside the workspace.
+    for abandoned_stage in "$WORKSPACE"/.chart-install.*; do
+      if [[ -d "$abandoned_stage" && ! -L "$abandoned_stage" ]]; then
+        rm -rf -- "$abandoned_stage"
+      fi
+    done
     # A retained/legacy workspace is not a new credential identity, including after reinstall.
     if [[ -f "$WORKSPACE/.chart-install-complete" ]] || { [[ ! -f "$CONFIG_DIR/.chart-crypto-state" ]] && { [[ -n "$(ls -A "$CONFIG_DIR" 2>/dev/null)" ]] || [[ -n "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]]; }; }; then
       PRESERVE_CREDENTIALS=true
